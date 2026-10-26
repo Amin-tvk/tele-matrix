@@ -1,10 +1,12 @@
-import { memo, useEffect } from '../../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiStarsAmount, ApiTonAmount } from '../../../api/types';
 import { SettingsScreens } from '../../../types';
 
-import { FAQ_URL, PRIVACY_URL, TON_CURRENCY_CODE } from '../../../config';
+import {
+  FAQ_URL, IS_TELEGRAM_SERVICES_ENABLED, PRIVACY_URL, TON_CURRENCY_CODE,
+} from '../../../config';
 import { formatStarsAmount } from '../../../global/helpers/payments';
 import {
   selectIsGiveawayGiftsPurchaseAvailable,
@@ -12,6 +14,7 @@ import {
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { formatStarsAsIcon, formatTonAsIcon } from '../../../util/localization/format';
+import { callApi } from '../../../api/gramjs';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -52,6 +55,8 @@ const SettingsMain = ({
 }: OwnProps & StateProps) => {
   const {
     loadMoreProfilePhotos,
+    openEncryptionRecoveryModal,
+    openServerAdminModal,
     openPremiumModal,
     openSupportChat,
     openUrl,
@@ -61,6 +66,12 @@ const SettingsMain = ({
   } = getActions();
 
   const [isSupportDialogOpen, openSupportDialog, closeSupportDialog] = useFlag(false);
+  const [isServerAdmin, setIsServerAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+    void callApi('fetchIsServerAdmin').then((result) => setIsServerAdmin(Boolean(result)));
+  }, [isActive]);
 
   const lang = useLang();
 
@@ -133,15 +144,29 @@ const SettingsMain = ({
             <span className="subtitle">{lang('SettingsNotificationsDesc')}</span>
           </ListItem>
 
+          {IS_TELEGRAM_SERVICES_ENABLED && (
+            <ListItem
+              icon="lock-filled"
+              iconBg="gray"
+              multiline
+              narrow
+              onClick={() => openSettingsScreen({ screen: SettingsScreens.Privacy })}
+            >
+              <span className="title">{lang('PrivacySettings')}</span>
+              <span className="subtitle">{lang('SettingsPrivacyDesc')}</span>
+            </ListItem>
+          )}
+
+          {/* Last seen is the one privacy setting the Matrix server enforces */}
           <ListItem
             icon="lock-filled"
             iconBg="gray"
             multiline
             narrow
-            onClick={() => openSettingsScreen({ screen: SettingsScreens.Privacy })}
+            onClick={() => openSettingsScreen({ screen: SettingsScreens.PrivacyLastSeen })}
           >
-            <span className="title">{lang('PrivacySettings')}</span>
-            <span className="subtitle">{lang('SettingsPrivacyDesc')}</span>
+            <span className="title">{lang('PrivacyLastSeen')}</span>
+            <span className="subtitle">{lang('PeyvandLastSeenDesc')}</span>
           </ListItem>
 
           <ListItem
@@ -177,16 +202,18 @@ const SettingsMain = ({
             <span className="subtitle">{lang('SettingsPerformanceDesc')}</span>
           </ListItem>
 
-          <ListItem
-            icon="smile-filled"
-            iconBg="pink"
-            multiline
-            narrow
-            onClick={() => openSettingsScreen({ screen: SettingsScreens.Stickers })}
-          >
-            <span className="title">{lang('MenuStickers')}</span>
-            <span className="subtitle">{lang('SettingsStickersDesc')}</span>
-          </ListItem>
+          {IS_TELEGRAM_SERVICES_ENABLED && (
+            <ListItem
+              icon="smile-filled"
+              iconBg="pink"
+              multiline
+              narrow
+              onClick={() => openSettingsScreen({ screen: SettingsScreens.Stickers })}
+            >
+              <span className="title">{lang('MenuStickers')}</span>
+              <span className="subtitle">{lang('SettingsStickersDesc')}</span>
+            </ListItem>
+          )}
 
           <ListItem
             icon="web-filled"
@@ -200,6 +227,30 @@ const SettingsMain = ({
               {lang('SettingsLanguageDesc', { language: lang.languageInfo?.nativeName || lang.rawCode })}
             </span>
           </ListItem>
+
+          <ListItem
+            icon="lock-filled"
+            iconBg="green"
+            multiline
+            narrow
+            onClick={() => openEncryptionRecoveryModal()}
+          >
+            <span className="title">{lang('MatrixEncryptionSettings')}</span>
+            <span className="subtitle">{lang('MatrixEncryptionSettingsDesc')}</span>
+          </ListItem>
+
+          {isServerAdmin && (
+            <ListItem
+              icon="admin"
+              iconBg="orange"
+              multiline
+              narrow
+              onClick={() => openServerAdminModal()}
+            >
+              <span className="title">{lang('MatrixAdminTitle')}</span>
+              <span className="subtitle">{lang('MatrixAdminSettingsDesc')}</span>
+            </ListItem>
+          )}
 
           <ListItem
             icon="devices-filled"
@@ -216,91 +267,95 @@ const SettingsMain = ({
           </ListItem>
         </Island>
 
-        <Island>
-          {canBuyPremium && (
-            <ListItem
-              icon="star"
-              iconBg="premium"
-              narrow
-              onClick={() => openPremiumModal()}
-            >
-              {lang('TelegramPremium')}
-            </ListItem>
-          )}
+        {IS_TELEGRAM_SERVICES_ENABLED && (
+          <>
+            <Island>
+              {canBuyPremium && (
+                <ListItem
+                  icon="star"
+                  iconBg="premium"
+                  narrow
+                  onClick={() => openPremiumModal()}
+                >
+                  {lang('TelegramPremium')}
+                </ListItem>
+              )}
 
-          <ListItem
-            icon="stars-filled"
-            iconBg="orange"
-            narrow
-            onClick={() => openStarsBalanceModal({})}
-          >
-            {lang('MenuStars')}
-            {Boolean(starsBalance) && (
-              <span className="settings-item__current-value">
-                {formatStarsAsIcon(lang, formatStarsAmount(lang, starsBalance), {
-                  asFont: true,
-                  withIconLast: true,
-                  className: styles.balanceStar,
-                })}
-              </span>
-            )}
-          </ListItem>
+              <ListItem
+                icon="stars-filled"
+                iconBg="orange"
+                narrow
+                onClick={() => openStarsBalanceModal({})}
+              >
+                {lang('MenuStars')}
+                {Boolean(starsBalance) && (
+                  <span className="settings-item__current-value">
+                    {formatStarsAsIcon(lang, formatStarsAmount(lang, starsBalance), {
+                      asFont: true,
+                      withIconLast: true,
+                      className: styles.balanceStar,
+                    })}
+                  </span>
+                )}
+              </ListItem>
 
-          <ListItem
-            icon="gram-filled"
-            iconBg="blue"
-            narrow
-            onClick={() => openStarsBalanceModal({ currency: TON_CURRENCY_CODE })}
-          >
-            {lang('GramEarnings')}
-            {Boolean(tonBalance) && (
-              <span className="settings-item__current-value">
-                {formatTonAsIcon(lang, tonBalance.amount, {
-                  withIconLast: true,
-                  className: styles.balanceGem,
-                })}
-              </span>
-            )}
-          </ListItem>
+              <ListItem
+                icon="gram-filled"
+                iconBg="blue"
+                narrow
+                onClick={() => openStarsBalanceModal({ currency: TON_CURRENCY_CODE })}
+              >
+                {lang('GramEarnings')}
+                {Boolean(tonBalance) && (
+                  <span className="settings-item__current-value">
+                    {formatTonAsIcon(lang, tonBalance.amount, {
+                      withIconLast: true,
+                      className: styles.balanceGem,
+                    })}
+                  </span>
+                )}
+              </ListItem>
 
-          {isGiveawayAvailable && (
-            <ListItem
-              icon="gift-filled"
-              iconBg="orange"
-              narrow
-              onClick={() => openGiftRecipientPicker()}
-            >
-              {lang('MenuSendGift')}
-            </ListItem>
-          )}
-        </Island>
+              {isGiveawayAvailable && (
+                <ListItem
+                  icon="gift-filled"
+                  iconBg="orange"
+                  narrow
+                  onClick={() => openGiftRecipientPicker()}
+                >
+                  {lang('MenuSendGift')}
+                </ListItem>
+              )}
+            </Island>
 
-        <Island>
-          <ListItem
-            icon="support-filled"
-            iconBg="red"
-            narrow
-            onClick={openSupportDialog}
-          >
-            {lang('AskAQuestion')}
-          </ListItem>
-          <ListItem
-            icon="help-filled"
-            iconBg="blue"
-            narrow
-            onClick={() => openUrl({ url: FAQ_URL })}
-          >
-            {lang('MenuTelegramFaq')}
-          </ListItem>
-          <ListItem
-            icon="privacy-policy-filled"
-            iconBg="green"
-            narrow
-            onClick={() => openUrl({ url: PRIVACY_URL })}
-          >
-            {lang('MenuPrivacyPolicy')}
-          </ListItem>
-        </Island>
+            <Island>
+              <ListItem
+                icon="support-filled"
+                iconBg="red"
+                narrow
+                onClick={openSupportDialog}
+              >
+                {lang('AskAQuestion')}
+              </ListItem>
+              <ListItem
+                icon="help-filled"
+                iconBg="blue"
+                narrow
+                onClick={() => openUrl({ url: FAQ_URL })}
+              >
+                {lang('MenuTelegramFaq')}
+              </ListItem>
+              <ListItem
+                icon="privacy-policy-filled"
+                iconBg="green"
+                narrow
+                onClick={() => openUrl({ url: PRIVACY_URL })}
+              >
+                {lang('MenuPrivacyPolicy')}
+              </ListItem>
+            </Island>
+          </>
+        )}
       </div>
       <ConfirmDialog
         isOpen={isSupportDialogOpen}

@@ -13,6 +13,7 @@ import {
   BETA_CHANGELOG_URL,
   FEEDBACK_URL,
   IS_BETA,
+  IS_TELEGRAM_SERVICES_ENABLED,
   IS_TEST,
   PRODUCTION_HOSTNAME,
   WEB_VERSION_BASE,
@@ -225,7 +226,7 @@ const LeftSideMenuItems = ({
           {lang('WalletMenuItem')}
         </MenuItem>
       )}
-      {bots.map((bot) => (
+      {IS_TELEGRAM_SERVICES_ENABLED && bots.map((bot) => (
         <AttachBotItem
           bot={bot}
           theme={theme}
@@ -265,36 +266,40 @@ const LeftSideMenuItems = ({
               <span className="menu-item-name capitalize">{lang('MenuUIFeaturesSwitch')}</span>
               <Toggle value={animationLevelValue} />
             </MenuItem>
-            <MenuSeparator />
-            <MenuItem
-              icon="help"
-              onClick={handleOpenTipsChat}
-            >
-              {lang('MenuTelegramFeatures')}
-            </MenuItem>
-            <MenuItem
-              icon="bug"
-              onClick={handleBugReportClick}
-            >
-              {lang('MenuReportBug')}
-            </MenuItem>
-            {IS_BETA && (
+            {IS_TELEGRAM_SERVICES_ENABLED && (
+              <>
+              <MenuSeparator />
               <MenuItem
-                icon="permissions"
-                onClick={handleChangelogClick}
+                icon="help"
+                onClick={handleOpenTipsChat}
               >
-                {lang('MenuBetaChangelog')}
+                {lang('MenuTelegramFeatures')}
               </MenuItem>
-            )}
-            {withOtherVersions && (
               <MenuItem
-                icon="K"
-                isCharIcon
-                href={`${WEB_VERSION_BASE}k`}
-                onClick={handleSwitchToWebK}
+                icon="bug"
+                onClick={handleBugReportClick}
               >
-                {lang('MenuSwitchToK')}
+                {lang('MenuReportBug')}
               </MenuItem>
+              {IS_BETA && (
+                <MenuItem
+                  icon="permissions"
+                  onClick={handleChangelogClick}
+                >
+                  {lang('MenuBetaChangelog')}
+                </MenuItem>
+              )}
+              {withOtherVersions && (
+                <MenuItem
+                  icon="K"
+                  isCharIcon
+                  href={`${WEB_VERSION_BASE}k`}
+                  onClick={handleSwitchToWebK}
+                >
+                  {lang('MenuSwitchToK')}
+                </MenuItem>
+              )}
+              </>
             )}
             {canInstall && (
               <MenuItem

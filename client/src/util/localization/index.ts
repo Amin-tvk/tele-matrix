@@ -23,7 +23,7 @@ import {
   type RegularLangFnParameters,
 } from './types';
 
-import { FORCE_FALLBACK_LANG, LANG_PACK } from '../../config';
+import { DEBUG, FORCE_FALLBACK_LANG, LANG_PACK } from '../../config';
 import { callApi } from '../../api/gramjs';
 import renderText, { type TextFilter } from '../../components/common/helpers/renderText';
 import { IS_INTL_LIST_FORMAT_SUPPORTED } from '../browser/globalEnvironment';
@@ -425,11 +425,23 @@ function getIntlLocale(languageInfo = language) {
   return languageInfo?.pluralCode || FORMATTERS_FALLBACK_LANG;
 }
 
+const reportedMissingKeys = new Set<string>();
+function reportMissingTranslation(langKey: string) {
+  if (reportedMissingKeys.has(langKey)) return;
+  reportedMissingKeys.add(langKey);
+  // eslint-disable-next-line no-console
+  console.warn(`[lang] Missing translation: ${langKey}`);
+}
+
 function getString(langKey: LangKey, count: number) {
   const shouldForceFallback = FORCE_FALLBACK_LANG && language?.langCode === FALLBACK_LANG_CODE;
   let langPackStringValue = !shouldForceFallback ? langPack?.strings[langKey] : undefined;
   if (langPackStringValue && isDeletedLangString(langPackStringValue)) langPackStringValue = undefined;
   const shouldUseFallback = !langPackStringValue;
+
+  if (DEBUG && shouldUseFallback && langPack && language?.langCode !== FALLBACK_LANG_CODE) {
+    reportMissingTranslation(langKey);
+  }
 
   if (!langPackStringValue && !fallbackLangPack) {
     loadFallbackPack();

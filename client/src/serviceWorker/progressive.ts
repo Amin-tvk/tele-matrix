@@ -30,6 +30,14 @@ const PART_TIMEOUT = 60000;
 
 const requestStates = new Map<string, RequestStates>();
 
+// Drops progressive caches from before the cache name was versioned
+export async function clearLegacyProgressiveCache() {
+  const names = await self.caches.keys();
+  await Promise.all(names
+    .filter((name) => /^tt-media-progressive(_\d+)?$/.test(name))
+    .map((name) => self.caches.delete(name)));
+}
+
 export async function respondForProgressive(e: FetchEvent) {
   const { url } = e.request;
   const accountSlot = getAccountSlot(url);

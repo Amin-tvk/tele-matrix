@@ -204,9 +204,13 @@ function LeftColumn({
           openSettingsScreen({ screen: SettingsScreens.GeneralChatBackground });
           return;
 
+        // Last seen is opened straight from the main settings screen
+        case SettingsScreens.PrivacyLastSeen:
+          openSettingsScreen({ screen: SettingsScreens.Main });
+          return;
+
         case SettingsScreens.PrivacyPhoneNumber:
         case SettingsScreens.PrivacyAddByPhone:
-        case SettingsScreens.PrivacyLastSeen:
         case SettingsScreens.PrivacyProfilePhoto:
         case SettingsScreens.PrivacyBio:
         case SettingsScreens.PrivacyBirthday:

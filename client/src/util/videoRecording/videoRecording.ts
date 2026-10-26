@@ -48,10 +48,13 @@ export async function start(
   onTick: (elapsedMs: number) => void,
   onPeak: (peak: number) => void,
 ): Promise<ActiveVideoRecording> {
-  const previewStream = await navigator.mediaDevices.getUserMedia({
+  let previewStream = await navigator.mediaDevices.getUserMedia({
     video: VIDEO_CONSTRAINTS,
     audio: true,
   });
+  // Only the front camera is mirrored, like a selfie preview; the back camera shows the scene as is
+  let isFrontCamera = true;
+  let isSwitchingCamera = false;
 
   let rafId: number | undefined;
   let isStopped = false;
@@ -163,12 +166,14 @@ export async function start(
       const offsetX = (sourceWidth - side) / 2;
       const offsetY = (sourceHeight - side) / 2;
 
-      // The camera frames are recorded MIRRORED, exactly as the selfie preview shows them — so the recipient
+      // Front camera frames are recorded MIRRORED, exactly as the selfie preview shows them — so the recipient
       // sees the same picture the sender saw. The watermark is drawn outside the mirrored transform.
       ctx.clearRect(0, 0, ROUND_VIDEO_RECORDING_SIZE, ROUND_VIDEO_RECORDING_SIZE);
       ctx.save();
-      ctx.translate(ROUND_VIDEO_RECORDING_SIZE, 0);
-      ctx.scale(-1, 1);
+      if (isFrontCamera) {
+        ctx.translate(ROUND_VIDEO_RECORDING_SIZE, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.filter = `blur(${BACKGROUND_BLUR_PX}px)`;
       ctx.drawImage(
         videoEl, offsetX, offsetY, side, side,
@@ -187,8 +192,10 @@ export async function start(
       ctx.beginPath();
       ctx.arc(CANVAS_RADIUS, CANVAS_RADIUS, CIRCLE_RADIUS, 0, Math.PI * 2);
       ctx.clip();
-      ctx.translate(ROUND_VIDEO_RECORDING_SIZE, 0);
-      ctx.scale(-1, 1);
+      if (isFrontCamera) {
+        ctx.translate(ROUND_VIDEO_RECORDING_SIZE, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(
         videoEl, offsetX, offsetY, side, side, 0, 0, ROUND_VIDEO_RECORDING_SIZE, ROUND_VIDEO_RECORDING_SIZE,
       );
@@ -258,8 +265,43 @@ export async function start(
 
   let stopPromise: Promise<Result> | undefined;
 
+  // Swaps the camera under the running recording: the recorder captures the canvas, so only the
+  // drawing source changes. The old camera is released first, as many phones can't open two at once
+  const switchCamera = async () => {
+    if (isStopped || isSwitchingCamera) return undefined;
+    isSwitchingCamera = true;
+    const getCamera = (isFront: boolean) => navigator.mediaDevices.getUserMedia({
+      video: { ...VIDEO_CONSTRAINTS, facingMode: isFront ? 'user' : 'environment' },
+    });
+
+    previewStream.getVideoTracks().forEach((track) => track.stop());
+    try {
+      let cameraStream: MediaStream;
+      try {
+        cameraStream = await getCamera(!isFrontCamera);
+        isFrontCamera = !isFrontCamera;
+      } catch (err) {
+        // The other camera is missing or busy: goes back to the one that was in use
+        cameraStream = await getCamera(isFrontCamera);
+      }
+
+      if (isStopped) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        return undefined;
+      }
+
+      previewStream = new MediaStream([...cameraStream.getVideoTracks(), ...previewStream.getAudioTracks()]);
+      videoEl.srcObject = previewStream;
+      await videoEl.play().catch(() => undefined);
+      return { previewStream, isFrontCamera };
+    } finally {
+      isSwitchingCamera = false;
+    }
+  };
+
   return {
     previewStream,
+    switchCamera,
     stop: () => {
       if (stopPromise) {
         return stopPromise;

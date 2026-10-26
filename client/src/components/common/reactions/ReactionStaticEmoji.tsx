@@ -6,6 +6,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
 import { isSameReaction } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
+import { getEmojiImageUrl } from '../../../util/emoji/emoji';
 
 import useThumbnail from '../../../hooks/media/useThumbnail';
 import useMedia from '../../../hooks/useMedia';
@@ -42,7 +43,10 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
   const staticIconId = staticIcon?.id;
   const mediaHash = staticIconId ? `document${staticIconId}` : undefined;
   const cacheBuster = availableReaction?.isLocalCache ? 0 : 1;
-  const mediaData = useMedia(mediaHash, false, undefined, undefined, cacheBuster);
+  const loadedMediaData = useMedia(mediaHash, false, undefined, undefined, cacheBuster);
+  // Reactions without server-side icons are rendered from bundled emoji images
+  const mediaData = loadedMediaData || (!staticIconId && reaction.type === 'emoji'
+    ? getEmojiImageUrl(reaction.emoticon) : undefined);
   const thumbDataUri = useThumbnail(staticIcon?.thumbnail);
 
   const { ref: thumbRef } = useMediaTransition<HTMLImageElement>({

@@ -8,7 +8,6 @@ import { MAIN_THREAD_ID } from '../../api/types';
 import {
   ALL_FOLDER_ID, ARCHIVED_FOLDER_ID, MEMBERS_LOAD_SLICE, SAVED_FOLDER_ID, SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../config';
-import { IS_TRANSLATION_SUPPORTED } from '../../util/browser/windowEnvironment';
 import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import {
@@ -31,7 +30,7 @@ import { selectTabState } from './tabs';
 import { selectThreadIdFromMessage } from './threads';
 import { selectTopicFromMessage } from './topics';
 import {
-  selectBot, selectIsCurrentUserPremium, selectUser, selectUserFullInfo,
+  selectBot, selectUser, selectUserFullInfo,
 } from './users';
 
 export function selectChat<T extends GlobalState>(global: T, chatId: string): ApiChat | undefined {
@@ -285,12 +284,8 @@ export function selectShouldDetectChatLanguage<T extends GlobalState>(
 
   if (chat.hasAutoTranslation) return true;
 
-  const { canTranslateChats } = global.settings.byKey;
-
-  const isPremium = selectIsCurrentUserPremium(global);
-  const isSavedMessages = selectIsChatWithSelf(global, chatId);
-
-  return IS_TRANSLATION_SUPPORTED && canTranslateChats && isPremium && !isSavedMessages;
+  // Whole-chat translation needs Telegram's translation service, which the Matrix server does not provide
+  return false;
 }
 
 export function selectCanTranslateChat<T extends GlobalState>(

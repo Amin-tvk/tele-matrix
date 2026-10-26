@@ -12,7 +12,7 @@ import buildGitInfoPlugin from './plugins/gitInfo.ts';
 import packageJson from './package.json' with { type: 'json' };
 
 const DIR_NAME = dirname(fileURLToPath(import.meta.url));
-const PRODUCTION_URL = 'https://web.telegram.org/a';
+const PRODUCTION_URL = 'https://tele.peyvand-yar.ir';
 
 const { version: APP_VERSION } = packageJson;
 const BUNDLE_STATS_OUT_DIR = 'bundle-stats';
@@ -167,10 +167,6 @@ export default defineConfig(({ mode }): UserConfig => {
 
   const shouldCollectWorkerReportBundles = bundleStatsVisualizerValue === '1' || bundleStatsValue === '1';
 
-  if (appEnv !== 'test' && (!telegramApiId || !telegramApiHash)) {
-    throw new Error('Missing required Telegram API credentials');
-  }
-
   setViteEnv({
     TG_APP_ENV: appEnv,
     TG_APP_MOCKED_CLIENT: appMockedClient,
@@ -184,6 +180,9 @@ export default defineConfig(({ mode }): UserConfig => {
     TG_TELEGRAM_API_ID: telegramApiId,
     TG_TELEGRAM_API_HASH: telegramApiHash,
     TG_TEST_SESSION: env.TEST_SESSION || '',
+    TG_APP_MATRIX_HOMESERVER: env.MATRIX_HOMESERVER || 'https://mtx.peyvand-yar.ir',
+    TG_APP_VAPID_PUBLIC_KEY: env.VAPID_PUBLIC_KEY || '',
+    TG_APP_PUSH_APP_ID: env.PUSH_APP_ID || 'ir.peyvand-yar.tele.web',
   });
 
   return {
@@ -300,8 +299,7 @@ function buildCsp(appEnv: string) {
   return `
   default-src 'self';
   connect-src 'self' wss://*.web.telegram.org blob: http: https: wss: ${appEnv === 'development' ? 'ipc:' : ''};
-  script-src 'self' 'wasm-unsafe-eval'
-    https://t.me/_websync_ https://telegram.me/_websync_ https://telegram.dog/_websync_;
+  script-src 'self' 'wasm-unsafe-eval';
   worker-src 'self'${appEnv === 'development' ? ' blob:' : ''};
   style-src 'self' 'unsafe-inline';
   font-src 'self' data:;

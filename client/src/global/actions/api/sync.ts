@@ -77,7 +77,7 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
   syncRecoveryTimeout = statusTimeout;
 
   const {
-    loadAllChats, preloadTopChatMessages, loadCommunities,
+    loadAllChats, preloadTopChatMessages, loadCommunities, checkEncryptionRecovery,
   } = actions;
 
   initFolderManager();
@@ -112,6 +112,7 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
 
       loadAllChats({ listType: 'archived' });
       preloadTopChatMessages();
+      checkEncryptionRecovery();
     },
   });
 });

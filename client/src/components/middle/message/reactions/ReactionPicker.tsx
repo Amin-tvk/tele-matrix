@@ -36,8 +36,8 @@ import useCurrentOrPrev from '../../../../hooks/useCurrentOrPrev';
 import useLastCallback from '../../../../hooks/useLastCallback';
 import useTuckFilter from '../../../../hooks/useTuckFilter';
 
-import CustomEmojiPicker from '../../../common/CustomEmojiPicker';
 import Menu from '../../../ui/Menu';
+import EmojiPicker from '../../composer/EmojiPicker';
 import StickerPicker from '../../composer/StickerPicker';
 import ReactionPickerLimited from './ReactionPickerLimited';
 
@@ -143,6 +143,15 @@ const ReactionPicker = ({
       });
     }
     closeReactionPicker();
+  });
+
+  // Matrix allows any emoji as a reaction, so the full emoji keyboard is offered
+  const handleEmojiSelect = useLastCallback((emoji: string) => {
+    if (renderedStoryId) {
+      handleStoryReactionSelect({ type: 'emoji', emoticon: emoji });
+      return;
+    }
+    handleToggleReaction({ type: 'emoji', emoticon: emoji });
   });
 
   const handleReactionContextMenu = useLastCallback((reaction: ApiReactionWithPaid) => {
@@ -266,24 +275,17 @@ const ReactionPicker = ({
         />
       ) : (
         <>
-          <CustomEmojiPicker
-            chatId={renderedChatId}
-            idPrefix="message-emoji-set-"
-            isHidden={!isOpen || !(shouldUseFullPicker || renderedStoryId)}
-            loadAndPlay={Boolean(isOpen && shouldUseFullPicker)}
-            isReactionPicker
-            isTuckEnabled={shouldUseTuck}
-            className={buildClassName(
-              !shouldUseFullPicker && !renderedStoryId && styles.hidden,
-              shouldUseTuck && styles.extendedPicker,
-            )}
-            pickerListStyle={shouldUseTuck ? pickerListStyle : undefined}
-            selectedReactionIds={selectedReactionIds}
-            isTranslucent={isTranslucent}
-            onCustomEmojiSelect={renderedStoryId ? handleStoryReactionSelect : handleToggleCustomReaction}
-            onReactionSelect={renderedStoryId ? handleStoryReactionSelect : handleToggleReaction}
-            onReactionContext={handleReactionContextMenu}
-          />
+          {(shouldUseFullPicker || renderedStoryId) && (
+            <EmojiPicker
+              className={styles.emojiPicker}
+              idPrefix="message-reaction-emoji-"
+              isHidden={!isOpen}
+              loadAndPlay={Boolean(isOpen)}
+              isTranslucent={isTranslucent}
+              onEmojiSelect={handleEmojiSelect}
+              onCustomEmojiSelect={handleToggleCustomReaction}
+            />
+          )}
           {!shouldUseFullPicker && Boolean(renderedChatId) && (
             <ReactionPickerLimited
               chatId={renderedChatId}

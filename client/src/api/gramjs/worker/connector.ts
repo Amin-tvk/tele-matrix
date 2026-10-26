@@ -90,7 +90,7 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
       params.set('account', String(ACCOUNT_SLOT));
     }
 
-    worker = new Worker(new URL('./worker.ts', import.meta.url), {
+    worker = new Worker(new URL('../../matrix/worker.ts', import.meta.url), {
       name: params.toString(),
       type: 'module',
     });

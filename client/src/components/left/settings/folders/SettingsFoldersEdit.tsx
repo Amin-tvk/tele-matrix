@@ -15,7 +15,9 @@ import {
   type ApiSticker,
 } from '../../../../api/types';
 
-import { FOLDER_TITLE_MAX_LENGTH, STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
+import {
+  FOLDER_TITLE_MAX_LENGTH, IS_TELEGRAM_SERVICES_ENABLED, STICKER_SIZE_FOLDER_SETTINGS,
+} from '../../../../config';
 import { selectCanShareFolder, selectCustomEmoji, selectIsCurrentUserPremium } from '../../../../global/selectors';
 import { selectCurrentLimit } from '../../../../global/selectors/limits';
 import buildClassName from '../../../../util/buildClassName';
@@ -535,37 +537,42 @@ const SettingsFoldersEdit = ({
           {lang('FilterColorHint')}
         </IslandDescription>
 
-        <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang('FolderLinkScreenTitle')}
-        </IslandTitle>
-        <Island>
-          <ListItem
-            className="settings-folders-list-item color-primary"
-            icon="add"
-            narrow
-            onClick={handleCreateInviteClick}
-          >
-            {lang('ChatListFilterCreateLinkNew')}
-          </ListItem>
+        {/* Folder invite links are a Telegram server feature */}
+        {IS_TELEGRAM_SERVICES_ENABLED && (
+          <>
+            <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
+              {lang('FolderLinkScreenTitle')}
+            </IslandTitle>
+            <Island>
+              <ListItem
+                className="settings-folders-list-item color-primary"
+                icon="add"
+                narrow
+                onClick={handleCreateInviteClick}
+              >
+                {lang('ChatListFilterCreateLinkNew')}
+              </ListItem>
 
-          {invites?.map((invite) => (
-            <ListItem
-              className="settings-folders-list-item"
-              icon="link"
-              narrow
-              multiline
-              onClick={handleEditInviteClick}
-              clickArg={invite.url}
-            >
-              <span className="title" dir="auto">{invite.title || invite.url}</span>
-              <span className="subtitle">
-                {lang('ChatListFilterLinkLabelChatCount', {
-                  count: lang.number(invite.peerIds.length),
-                }, { pluralValue: invite.peerIds.length })}
-              </span>
-            </ListItem>
-          ))}
-        </Island>
+              {invites?.map((invite) => (
+                <ListItem
+                  className="settings-folders-list-item"
+                  icon="link"
+                  narrow
+                  multiline
+                  onClick={handleEditInviteClick}
+                  clickArg={invite.url}
+                >
+                  <span className="title" dir="auto">{invite.title || invite.url}</span>
+                  <span className="subtitle">
+                    {lang('ChatListFilterLinkLabelChatCount', {
+                      count: lang.number(invite.peerIds.length),
+                    }, { pluralValue: invite.peerIds.length })}
+                  </span>
+                </ListItem>
+              ))}
+            </Island>
+          </>
+        )}
       </Surface>
 
       <FloatingActionButton

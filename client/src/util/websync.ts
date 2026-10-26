@@ -30,8 +30,11 @@ const saveSync = (authed: boolean) => {
 
 let lastTimeout: number | undefined;
 
+// Telegram cross-domain login sync does not apply to the Matrix-backed client
+const IS_WEBSYNC_DISABLED = true;
+
 export const forceWebsync = (authed: boolean) => {
-  if (IS_MOCKED_CLIENT || IS_TAURI) return undefined;
+  if (IS_WEBSYNC_DISABLED || IS_MOCKED_CLIENT || IS_TAURI) return undefined;
   const currentTs = getTs();
 
   const { canRedirect, ts } = JSON.parse(localStorage.getItem(WEBSYNC_KEY) || '{}');
@@ -79,7 +82,7 @@ export function stopWebsync() {
 }
 
 export function startWebsync() {
-  if (DEBUG || IS_TAURI) {
+  if (IS_WEBSYNC_DISABLED || DEBUG || IS_TAURI) {
     return;
   }
 

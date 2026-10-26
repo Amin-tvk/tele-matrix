@@ -563,6 +563,12 @@ addActionHandler('loadAllChats', async (global, actions, payload): Promise<void>
   let isCallbackFired = false;
   let i = 0;
 
+  // The list may have been fully loaded by the chat list itself before syncing started
+  if (global.chats.isFullyLoaded[listType]) {
+    await whenFirstBatchDone?.();
+    return;
+  }
+
   while (!global.chats.isFullyLoaded[listType]) {
     if (i++ >= INFINITE_LOOP_MARKER) {
       if (DEBUG) {

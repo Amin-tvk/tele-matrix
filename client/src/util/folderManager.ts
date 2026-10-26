@@ -288,6 +288,9 @@ export function updateFolderManager(global: GlobalState) {
 
   updateFolders(global, isAllFolderChanged, isArchivedFolderChanged, isSavedFolderChanged, areFoldersChanged);
 
+  // A fully loaded list without chats has no chat updates to build it from, so it would stay in the loading state
+  affectedFolderIds = affectedFolderIds.concat(getLoadedEmptyMainFolderIds(global));
+
   affectedFolderIds = affectedFolderIds.concat(updateChats(
     global,
     areFoldersChanged || isAllFolderChanged || isArchivedFolderChanged || isSavedFolderChanged,
@@ -307,6 +310,23 @@ export function updateFolderManager(global: GlobalState) {
       console.warn(`Slow \`updateFolderManager\`: ${Math.round(duration)} ms`);
     }
   }
+}
+
+function getLoadedEmptyMainFolderIds(global: GlobalState) {
+  const mainFolders = [
+    [ALL_FOLDER_ID, 'active'],
+    [ARCHIVED_FOLDER_ID, 'archived'],
+    [SAVED_FOLDER_ID, 'saved'],
+  ] as const;
+
+  return mainFolders
+    .filter(([folderId, listType]) => (
+      global.chats.isFullyLoaded[listType]
+      && !global.chats.listIds[listType]?.length
+      && prepared.folderSummariesById[folderId]
+      && !results.orderedIdsByFolderId[folderId]
+    ))
+    .map(([folderId]) => folderId);
 }
 
 function isMainFolderChanged(folderId: number, newListIds?: string[], newPinnedIds?: string[]) {

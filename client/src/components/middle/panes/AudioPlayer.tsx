@@ -47,6 +47,9 @@ import buildClassName from '../../../util/buildClassName';
 import * as mediaLoader from '../../../util/mediaLoader';
 import { clearMediaSession } from '../../../util/mediaSession';
 import { getOrderButtonIcon, ORDER_BUTTON_ICONS } from '../../common/helpers/playbackOrder';
+import {
+  formatPlaybackRate, getActivePlaybackRate, getNextPlaybackRate, REGULAR_PLAYBACK_RATE,
+} from '../../common/helpers/playbackRates';
 import renderText from '../../common/helpers/renderText';
 
 import useAppLayout from '../../../hooks/useAppLayout';
@@ -121,17 +124,15 @@ type StateProps = {
 };
 
 const PLAYBACK_RATES: Record<number, number> = {
-  0.5: 0.66,
-  0.75: 0.8,
+  0.5: 0.5,
+  0.75: 0.75,
   1: 1,
-  1.5: 1.4,
-  2: 1.8,
+  1.5: 1.5,
+  2: 2,
 };
 const PLAYBACK_RATE_VALUES = Object.keys(PLAYBACK_RATES).sort().map(Number);
 
 const PLAY_PAUSE_ICON_SIZE = 32;
-const REGULAR_PLAYBACK_RATE = 1;
-const DEFAULT_FAST_PLAYBACK_RATE = 2;
 
 const AudioPlayer = ({
   message,
@@ -386,22 +387,14 @@ const AudioPlayer = ({
     setPlaybackRate(shouldBeActive ? rate : REGULAR_PLAYBACK_RATE);
   });
 
+  // Each tap steps through 1x, 1.5x and 2x; other speeds are in the menu
   const handlePlaybackClick = useLastCallback(() => {
     handleContextMenuClose();
-    const oldRate = Number(Object.entries(PLAYBACK_RATES).find(([, rate]) => rate === playbackRate)?.[0])
-      || REGULAR_PLAYBACK_RATE;
-    const newIsActive = !isPlaybackRateActive;
-
-    updatePlaybackRate(
-      newIsActive && oldRate === REGULAR_PLAYBACK_RATE ? DEFAULT_FAST_PLAYBACK_RATE : oldRate,
-      newIsActive,
-    );
+    updatePlaybackRate(getNextPlaybackRate(getActivePlaybackRate(playbackRate, isPlaybackRateActive)));
   });
 
   const PlaybackRateButton = useLastCallback(() => {
-    const displayRate = Object.entries(PLAYBACK_RATES).find(([, rate]) => rate === playbackRate)?.[0]
-      || REGULAR_PLAYBACK_RATE;
-    const text = `${playbackRate === REGULAR_PLAYBACK_RATE ? DEFAULT_FAST_PLAYBACK_RATE : displayRate}Х`;
+    const text = formatPlaybackRate(getActivePlaybackRate(playbackRate, isPlaybackRateActive));
     return (
       <div className={styles.playbackWrapper}>
         {isContextMenuOpen && <div className={styles.playbackBackdrop} onClick={handleContextMenuClose} />}
@@ -415,7 +408,7 @@ const AudioPlayer = ({
           size="smaller"
           ariaLabel={lang('AudioPlaybackRate')}
           ripple={!isMobile}
-          onMouseEnter={handleContextMenu}
+          onMouseEnter={!IS_TOUCH_ENV ? handleContextMenu : undefined}
           onClick={handlePlaybackClick}
           onMouseDown={handleBeforeContextMenu}
           onContextMenu={handleContextMenu}

@@ -2,7 +2,7 @@ import { DEBUG } from '../config';
 import { pause } from '../util/schedulers';
 import { clearAssetCache, respondWithCache, respondWithCacheNetworkFirst } from './assetCache';
 import { respondForDownload } from './download';
-import { respondForProgressive } from './progressive';
+import { clearLegacyProgressiveCache, respondForProgressive } from './progressive';
 import {
   handleClientMessage as handleNotificationMessage,
   handleNotificationClick,
@@ -42,6 +42,7 @@ self.addEventListener('activate', (e) => {
       pause(ACTIVATE_TIMEOUT),
       Promise.all([
         clearAssetCache(),
+        clearLegacyProgressiveCache(),
         // Become available to all pages
         self.clients.claim(),
       ]),

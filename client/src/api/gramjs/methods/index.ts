@@ -5,6 +5,14 @@ export {
   setOpenedChannelIds,
 } from './client';
 
+export { provideMatrixLogin, provideMatrixRegistration } from '../../matrix/auth';
+export { fetchEncryptionStatus, restoreEncryptionKeys, setupEncryptionRecovery } from '../../matrix/encryption';
+export { retryConnectionNow } from '../../matrix/client';
+export {
+  createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminInvites, fetchAdminUsers, fetchIsServerAdmin,
+  logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,
+} from '../../matrix/admin';
+
 export {
   provideAuthPhoneNumber, provideAuthCode, provideAuthPassword, provideAuthRegistration, restartAuth, restartAuthWithQr,
   restartAuthWithPasskey,

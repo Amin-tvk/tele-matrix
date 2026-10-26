@@ -100,3 +100,8 @@
 
   @include mixins.gradient-border-bottom(calc(2rem + 0.5rem), calc(2rem + 0.0625rem));
 }
+
+.emojiPicker {
+  width: 100%;
+  height: 22rem;
+}

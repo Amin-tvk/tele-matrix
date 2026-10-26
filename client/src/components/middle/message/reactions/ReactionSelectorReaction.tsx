@@ -3,6 +3,7 @@ import { memo } from '../../../../lib/teact/teact';
 import type { ApiAvailableReaction, ApiReaction } from '../../../../api/types';
 
 import buildClassName from '../../../../util/buildClassName';
+import { getEmojiImageUrl } from '../../../../util/emoji/emoji';
 import { REM } from '../../../common/helpers/mediaDimensions';
 
 import useFlag from '../../../../hooks/useFlag';
@@ -35,6 +36,7 @@ const ReactionSelectorReaction = ({
   const mediaAppearData = useMedia(`sticker${reaction.appearAnimation?.id}`, !isReady || noAppearAnimation);
   const mediaData = useMedia(`document${reaction.selectAnimation?.id}`, !isReady || noAppearAnimation);
   const staticIconData = useMedia(`document${reaction.staticIcon?.id}`, !noAppearAnimation);
+  const hasAnimations = Boolean(reaction.appearAnimation || reaction.selectAnimation);
   const [isAnimationLoaded, markAnimationLoaded] = useFlag();
 
   const [isFirstPlay, , unmarkIsFirstPlay] = useFlag(true);
@@ -50,7 +52,15 @@ const ReactionSelectorReaction = ({
       onClick={handleClick}
       onMouseEnter={isReady && !isFirstPlay ? activate : undefined}
     >
-      {noAppearAnimation && (
+      {!hasAnimations && (
+        <img
+          className={styles.staticIcon}
+          src={getEmojiImageUrl(reaction.reaction.emoticon)}
+          alt={reaction.reaction.emoticon}
+          draggable={false}
+        />
+      )}
+      {hasAnimations && noAppearAnimation && (
         <img
           className={styles.staticIcon}
           src={staticIconData}
@@ -58,7 +68,7 @@ const ReactionSelectorReaction = ({
           draggable={false}
         />
       )}
-      {!isAnimationLoaded && !noAppearAnimation && (
+      {hasAnimations && !isAnimationLoaded && !noAppearAnimation && (
         <AnimatedSticker
           key={reaction.appearAnimation?.id}
           tgsUrl={mediaAppearData}
@@ -69,7 +79,7 @@ const ReactionSelectorReaction = ({
           forceAlways
         />
       )}
-      {!isFirstPlay && !noAppearAnimation && (
+      {hasAnimations && !isFirstPlay && !noAppearAnimation && (
         <AnimatedSticker
           key={reaction.selectAnimation?.id}
           tgsUrl={mediaData}

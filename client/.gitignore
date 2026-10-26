@@ -11,3 +11,7 @@ dev/perf/screenshot*
 .DS_store
 .github/workflows/*
 !.github/workflows/package-and-publish.yml
+
+# Build output is not kept in this repository
+/dist/
+/dist-dev/

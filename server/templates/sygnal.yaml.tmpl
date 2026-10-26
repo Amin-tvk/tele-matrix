@@ -1,0 +1,37 @@
+# Push gateway for the Peyvand web client (Web Push / VAPID)
+log:
+  setup:
+    version: 1
+    formatters:
+      normal:
+        format: "%(asctime)s [%(process)d] %(levelname)-5s %(name)s %(message)s"
+    handlers:
+      stderr:
+        class: "logging.StreamHandler"
+        formatter: "normal"
+        stream: "ext://sys.stderr"
+    loggers:
+      sygnal.access:
+        propagate: false
+        handlers: ["stderr"]
+        level: "INFO"
+      sygnal:
+        propagate: false
+        handlers: ["stderr"]
+    root:
+      handlers: ["stderr"]
+      level: "INFO"
+    disable_existing_loggers: false
+  access:
+    x_forwarded_for: true
+
+http:
+  bind_addresses: ['0.0.0.0']
+  port: 5000
+
+apps:
+  # Must match PUSH_APP_ID used to build the client
+  {{PUSH_APP_ID}}:
+    type: webpush
+    vapid_private_key: /data/vapid_private.pem
+    vapid_contact_email: {{ADMIN_EMAIL}}

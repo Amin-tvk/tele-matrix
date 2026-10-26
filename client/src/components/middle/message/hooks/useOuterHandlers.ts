@@ -111,6 +111,9 @@ export default function useOuterHandlers(
 
     if (!IS_TOUCH_ENV) return;
 
+    // A tap on a label also clicks its input, which would look like a double tap
+    if ((e.target as HTMLElement).closest('label, input, button, a[href]')) return;
+
     if (doubleTapTimeoutRef.current) {
       clearTimeout(doubleTapTimeoutRef.current);
       doubleTapTimeoutRef.current = undefined;

@@ -1,4 +1,5 @@
 import { APP_NAME, DEBUG, DEBUG_MORE } from '../config';
+import { buildRoomChatId, buildUserPeerId } from '../api/matrix/peerIds';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -24,9 +25,23 @@ type PushData = {
   description: string;
 };
 
+// Payload sent by the Sygnal web push gateway for Matrix events
+type MatrixPushData = {
+  event_id?: string;
+  room_id: string;
+  room_name?: string;
+  sender?: string;
+  sender_display_name?: string;
+  type?: string;
+  content?: { body?: string; msgtype?: string };
+  prio?: 'high' | 'low';
+  unread?: number;
+};
+
 type NotificationData = {
   messageId?: number;
   chatId?: string;
+  fallbackChatId?: string;
   title: string;
   body: string;
   isSilent?: boolean;
@@ -37,6 +52,7 @@ type NotificationData = {
 
 type FocusMessageData = {
   chatId?: string;
+  fallbackChatId?: string;
   messageId?: number;
   reaction?: string;
   shouldReplaceHistory?: boolean;
@@ -116,6 +132,8 @@ async function playNotificationSound(id: string) {
 
 function showNotification({
   chatId,
+  fallbackChatId,
+  roomId,
   messageId,
   body,
   title,
@@ -123,13 +141,15 @@ function showNotification({
   reaction,
   isSilent,
   shouldReplaceHistory,
-}: NotificationData) {
+}: NotificationData & { roomId?: string }) {
   const isFirstBatch = new Date().valueOf() - lastSyncAt < 1000;
   const tag = String(isFirstBatch ? 0 : chatId || 0);
   const options: NotificationOptions = {
     body,
     data: {
       chatId,
+      fallbackChatId,
+      roomId,
       messageId,
       reaction,
       count: 1,
@@ -165,6 +185,56 @@ async function closeNotifications({
   });
 }
 
+const MATRIX_MEDIA_LABELS: Record<string, string> = {
+  'm.image': '🖼 Photo',
+  'm.video': '📹 Video',
+  'm.audio': '🎤 Voice message',
+  'm.file': '📎 File',
+  'm.location': '📍 Location',
+};
+
+function isMatrixPush(data: unknown): data is MatrixPushData {
+  // `Boolean` is shadowed by the push flag enum in this module
+  return typeof data === 'object' && data !== null && 'room_id' in data;
+}
+
+function getMatrixNotificationData(data: MatrixPushData): NotificationData {
+  const sender = data.sender_display_name || data.sender || '';
+  const msgtype = data.content?.msgtype;
+  const text = data.type === 'm.room.encrypted' || !data.content
+    ? 'New message'
+    : (msgtype && MATRIX_MEDIA_LABELS[msgtype]) || data.content.body || 'New message';
+  const isDirect = !data.room_name || data.room_name === sender;
+
+  return {
+    // Direct chats use the sender's peer ID, other rooms their own ID; the client resolves which one exists
+    chatId: isDirect && data.sender ? buildUserPeerId(data.sender) : buildRoomChatId(data.room_id),
+    fallbackChatId: isDirect && data.sender ? buildRoomChatId(data.room_id) : data.sender && buildUserPeerId(data.sender),
+    title: isDirect ? sender || APP_NAME : data.room_name!,
+    body: isDirect ? text : `${sender}: ${text}`,
+    isSilent: data.prio === 'low',
+  };
+}
+
+async function handleMatrixPush(data: MatrixPushData) {
+  const notification = getMatrixNotificationData(data);
+
+  // A read receipt from another device clears the room's notifications
+  if (!data.event_id) {
+    const shown = await self.registration.getNotifications();
+    shown.forEach((item) => {
+      if (item.data?.roomId === data.room_id) item.close();
+    });
+    return;
+  }
+
+  // The visible app shows its own unread state, so no system notification is needed
+  const clients = await getClients();
+  if (clients.some((client) => client.focused && client.visibilityState === 'visible')) return;
+
+  await showNotification({ ...notification, roomId: data.room_id } as NotificationData);
+}
+
 export function handlePush(e: PushEvent) {
   if (DEBUG) {
     // eslint-disable-next-line no-console
@@ -176,6 +246,11 @@ export function handlePush(e: PushEvent) {
   }
 
   const data = getPushData(e);
+
+  if (isMatrixPush(data)) {
+    e.waitUntil(handleMatrixPush(data));
+    return;
+  }
 
   // Do not show muted notifications
   if (!data || data.mute === Boolean.True) return;

@@ -24,6 +24,10 @@ export const IS_BETA = APP_ENV === 'staging';
 export const PAID_MESSAGES_PURPOSE = 'paid_messages';
 
 export const DEBUG = APP_ENV !== 'production';
+// Telegram-only services (Premium, Stars, stories, bots, support chat...) have no Matrix counterpart
+export const IS_TELEGRAM_SERVICES_ENABLED = false;
+// Web Push key of the Matrix push gateway (Sygnal) that delivers notifications while the app is closed
+export const PUSH_VAPID_PUBLIC_KEY = import.meta.env.TG_APP_VAPID_PUBLIC_KEY || '';
 export const DEBUG_MORE = false;
 export const DEBUG_CALLS = false;
 export const DEBUG_LOG_FILENAME = 'tt-log.json';
@@ -59,7 +63,8 @@ export const MEDIA_CACHE_DISABLED = false;
 export const MEDIA_CACHE_NAME = 'tt-media';
 export const MEDIA_CACHE_NAME_AVATARS = 'tt-media-avatars';
 export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
-export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
+// Versioned: older entries were saved with a wrong file size for Matrix media
+export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive-v2';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
 export const ASSET_CACHE_NAME = 'tt-assets';
@@ -147,7 +152,7 @@ export const ANIMATION_LEVEL_CUSTOM = -1;
 export const ANIMATION_LEVEL_MIN = 0;
 export const ANIMATION_LEVEL_MED = 1;
 export const ANIMATION_LEVEL_MAX = 2;
-export const ANIMATION_LEVEL_DEFAULT = ANIMATION_LEVEL_MED;
+export const ANIMATION_LEVEL_DEFAULT = ANIMATION_LEVEL_MAX;
 
 export const DEFAULT_MESSAGE_TEXT_SIZE_PX = 16;
 export const IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 17;
@@ -397,7 +402,7 @@ export const VERIFICATION_CODES_USER_ID = '489000';
 export const ANONYMOUS_USER_ID = '2666000';
 export const RESTRICTED_EMOJI_SET_ID = '7173162320003080';
 export const COCOON_EMOJI_ID = '5197252827247841976';
-export const LOCAL_MESSAGES_LIMIT = 1e6; // 1M
+export const LOCAL_MESSAGES_LIMIT = 1e3;
 export const CHANNEL_ID_BASE = 10n ** 12n;
 export const DEFAULT_GIF_SEARCH_BOT_USERNAME = 'gif';
 export const ALL_FOLDER_ID = 0;

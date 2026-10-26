@@ -14,6 +14,8 @@ import BrowserCloseConfirmationModal from '../main/BrowserCloseConfirmationModal
 import SafeLinkModal from '../main/SafeLinkModal.async';
 import AiMessageEditorModal from '../middle/composer/AiMessageEditorModal/AiMessageEditorModal.async';
 import AboutAdsModal from './aboutAds/AboutAdsModal.async';
+import EncryptionRecoveryModal from './encryptionRecovery/EncryptionRecoveryModal';
+import ServerAdminModal from './serverAdmin/ServerAdminModal';
 import AgeVerificationModal from './ageVerification/AgeVerificationModal.async';
 import AiTonePreviewModal from './aiTonePreview/AiTonePreviewModal.async';
 import AttachBotInstallModal from './attachBotInstall/AttachBotInstallModal.async';
@@ -131,6 +133,8 @@ type ModalKey = keyof Pick<TabState,
   'emojiStatusAccessModal' |
   'locationAccessModal' |
   'aboutAdsModal' |
+  'encryptionRecoveryModal' |
+  'serverAdminModal' |
   'giftPreviewModal' |
   'giftUpgradeModal' |
   'giftCraftModal' |
@@ -276,6 +280,8 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   emojiStatusAccessModal: EmojiStatusAccessModal,
   locationAccessModal: LocationAccessModal,
   aboutAdsModal: AboutAdsModal,
+  encryptionRecoveryModal: EncryptionRecoveryModal,
+  serverAdminModal: ServerAdminModal,
   giftPreviewModal: GiftPreviewModal,
   giftUpgradeModal: GiftUpgradeModal,
   giftCraftModal: GiftCraftModal,

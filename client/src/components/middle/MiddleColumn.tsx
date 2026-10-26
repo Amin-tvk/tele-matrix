@@ -79,6 +79,7 @@ import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import { useResize } from '../../hooks/useResize';
 import useSyncEffect from '../../hooks/useSyncEffect';
 import usePinnedMessage from './hooks/usePinnedMessage';
+import useSwipeBack from './hooks/useSwipeBack';
 import useFluidBackgroundFilter from './message/hooks/useFluidBackgroundFilter';
 
 import Composer from '../common/Composer';
@@ -518,6 +519,27 @@ function MiddleColumn({
   useHistoryBack({
     isActive: isSelectModeActive,
     onBack: exitMessageSelectMode,
+  });
+
+  // Same steps as the header Back button
+  const isSwipeClosingChat = !isSelectModeActive && messageListType === 'thread' && currentTransitionKey === 0;
+  const handleSwipeBack = useLastCallback(() => {
+    document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR)?.blur();
+
+    if (isSelectModeActive) {
+      exitMessageSelectMode();
+    } else if (isSwipeClosingChat) {
+      openChat({ id: undefined }, { forceOnHeavyAnimation: true });
+    } else {
+      openPreviousChat();
+    }
+  });
+
+  useSwipeBack({
+    ref: middleColumnRef,
+    isEnabled: isMobile && Boolean(chatId) && !isRightColumnShown,
+    isClosingChat: isSwipeClosingChat,
+    onBack: handleSwipeBack,
   });
 
   // Prepare filter beforehand to avoid flickering

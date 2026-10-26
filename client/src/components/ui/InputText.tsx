@@ -31,6 +31,7 @@ type OwnProps = {
   autoFocus?: boolean;
   teactExperimentControlled?: boolean;
   noMargin?: boolean;
+  type?: 'text' | 'password';
   inputMode?: 'text' | 'none' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
   onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
   onInput?: (e: FormEvent<HTMLInputElement>) => void;
@@ -62,6 +63,7 @@ const InputText = ({
   autoFocus,
   teactExperimentControlled,
   noMargin,
+  type = 'text',
   onChange,
   onInput,
   onKeyPress,
@@ -88,7 +90,7 @@ const InputText = ({
       <input
         ref={ref}
         className="form-control"
-        type="text"
+        type={type}
         id={id}
         dir="auto"
         value={value || ''}

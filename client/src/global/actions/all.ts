@@ -13,6 +13,7 @@ import './api/musicPicker';
 import './api/topPeers';
 import './api/bots';
 import './api/settings';
+import './api/encryption';
 import './api/twoFaSettings';
 import './api/payments';
 import './api/passcode';

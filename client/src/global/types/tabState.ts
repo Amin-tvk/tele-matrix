@@ -301,6 +301,18 @@ export type TabState = {
     messageId: number;
   };
 
+  serverAdminModal?: {};
+
+  encryptionRecoveryModal?: {
+    // `setup` creates the first recovery key, `ready` is shown on a device that already has everything set up
+    mode?: 'restore' | 'setup' | 'ready' | 'reset';
+    isLoading?: boolean;
+    errorKey?: 'MatrixRecoveryErrorWrongKey' | 'MatrixRecoveryErrorNoBackup' | 'MatrixRecoveryErrorUnknown'
+      | 'MatrixSetupPasswordNeeded' | 'MatrixSetupWrongPassword';
+    restoredCount?: number;
+    recoveryKey?: string;
+  };
+
   aboutAdsModal?: {
     randomId: string;
     canReport?: boolean;

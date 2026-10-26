@@ -154,6 +154,16 @@ export interface ActionPayloads {
   setAuthPhoneNumber: { phoneNumber: string };
   setAuthCode: { code: string };
   setAuthPassword: { password: string };
+  matrixLogin: { username: string; password: string };
+  checkEncryptionRecovery: undefined;
+  openServerAdminModal: WithTabId | undefined;
+  closeServerAdminModal: WithTabId | undefined;
+  openEncryptionRecoveryModal: WithTabId | undefined;
+  closeEncryptionRecoveryModal: WithTabId | undefined;
+  restoreEncryptionKeys: { key: string } & WithTabId;
+  setEncryptionRecoveryMode: { mode: 'restore' | 'setup' | 'ready' | 'reset' } & WithTabId;
+  setupEncryptionRecovery: { passphrase?: string; password?: string; isReset?: boolean } & WithTabId;
+  matrixRegister: { username: string; password: string; token: string; displayName?: string };
   signUp: {
     firstName: string;
     lastName: string;

@@ -7,7 +7,9 @@ import type {
 import type { GlobalState } from '../global/types';
 import { ApiMediaFormat } from '../api/types';
 
-import { APP_NAME, DEBUG, IS_TEST } from '../config';
+import {
+  APP_NAME, DEBUG, IS_TEST, PUSH_VAPID_PUBLIC_KEY,
+} from '../config';
 import {
   getChatAvatarHash,
   getChatTitle,
@@ -40,10 +42,18 @@ import jsxToHtml from './element/jsxToHtml';
 import { buildCollectionByKey } from './iteratees';
 import { getTranslationFn } from './localization';
 import * as mediaLoader from './mediaLoader';
-import { debounce } from './schedulers';
+import { debounce, pause } from './schedulers';
 import { getServerTime } from './serverTime';
 
 import MessageSummary from '../components/common/MessageSummary';
+
+const PUSH_SUBSCRIBE_TIMEOUT = 15000;
+
+function decodeBase64Url(value: string) {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
 
 function getDeviceToken(subscription: PushSubscription) {
   const data = subscription.toJSON();
@@ -255,9 +265,16 @@ export async function subscribe() {
   if (!checkIfShouldResubscribe(subscription)) return;
   await unsubscribeFromPush(subscription);
   try {
-    subscription = await serviceWorkerRegistration.pushManager.subscribe({
-      userVisibleOnly: true,
-    });
+    // Subscribing can hang when the browser cannot reach its push service, as happens behind some networks
+    subscription = await Promise.race([
+      serviceWorkerRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: PUSH_VAPID_PUBLIC_KEY ? decodeBase64Url(PUSH_VAPID_PUBLIC_KEY) : undefined,
+      }),
+      pause(PUSH_SUBSCRIBE_TIMEOUT).then(() => {
+        throw new DOMException('Push subscription timed out', 'AbortError');
+      }),
+    ]);
     const deviceToken = getDeviceToken(subscription);
     if (DEBUG) {
       // eslint-disable-next-line no-console
@@ -285,12 +302,9 @@ export async function subscribe() {
         // eslint-disable-next-line no-console
         console.log('[PUSH] Unable to subscribe to push.', error);
       }
-      // Request permissions and fall back to local notifications
-      // if pushManager.subscribe was aborted due to invalid VAPID key.
-      if ([DOMException.ABORT_ERR, DOMException.NOT_SUPPORTED_ERR].includes(error.code)) {
-        isSubscriptionFailed = true;
-        hasWebNotifications = await requestPermission();
-      }
+      // Fall back to local notifications while the app is open, e.g. when the browser's push service is unreachable
+      isSubscriptionFailed = true;
+      hasWebNotifications = await requestPermission();
     }
   }
   updateWebNotificationSettings({

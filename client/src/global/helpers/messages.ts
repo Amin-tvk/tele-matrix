@@ -53,8 +53,10 @@ import { getMainUsername } from './users';
 const RE_LINK = new RegExp(RE_LINK_TEMPLATE, 'i');
 
 let uiLocalMessageCounter = 0;
+// Message IDs are millisecond timestamps, so local IDs must keep a coarse, always-fractional step
 function getNextLocalMessageId(lastMessageId = 0) {
-  return lastMessageId + (++uiLocalMessageCounter / LOCAL_MESSAGES_LIMIT);
+  uiLocalMessageCounter = (uiLocalMessageCounter % (LOCAL_MESSAGES_LIMIT - 2)) + 1;
+  return Math.floor(lastMessageId) + uiLocalMessageCounter / LOCAL_MESSAGES_LIMIT;
 }
 
 export function getMessageHtmlId(messageId: number, index?: number) {

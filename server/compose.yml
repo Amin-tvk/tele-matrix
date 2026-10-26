@@ -1,0 +1,83 @@
+# Peyvand server stack. Everything listens on 127.0.0.1 only; the host nginx (server/data/nginx/peyvand.conf)
+# is the single public entry point. Run scripts/setup.sh first: it creates server/data with configs and secrets.
+name: peyvand
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: ./data/postgres.env
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  synapse:
+    image: matrixdotorg/synapse:v1.163.2
+    restart: unless-stopped
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      # Loads the last-seen privacy module
+      PYTHONPATH: /modules
+    volumes:
+      - ./data/synapse:/data
+      - ./synapse/modules:/modules:ro
+    ports:
+      - "127.0.0.1:18008:8008"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend, frontend]
+
+  # Web Push gateway for notifications in the Peyvand web app
+  sygnal:
+    image: matrixdotorg/sygnal:v0.17.0
+    restart: unless-stopped
+    environment:
+      SYGNAL_CONF: /data/sygnal.yaml
+    volumes:
+      - ./data/sygnal:/data:ro
+    ports:
+      - "127.0.0.1:18083:5000"
+    networks: [frontend]
+
+  # The Peyvand web app (built into server/data/www by scripts/build-client.sh)
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./data/www:/usr/share/nginx/html:ro
+      - ./templates/web-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:18085:80"
+    networks: [frontend]
+
+  # Synapse admin UI at https://<matrix domain>/admin/
+  ketesa:
+    image: ghcr.io/etkecc/ketesa:v1.5.1-subpath-admin
+    restart: unless-stopped
+    volumes:
+      - ./data/ketesa.json:/home/sws/public/admin/config.json:ro
+    ports:
+      - "127.0.0.1:18082:8080"
+    networks: [frontend]
+
+  # Optional second client (Cinny). Start with: docker compose --profile cinny up -d
+  cinny:
+    image: ghcr.io/cinnyapp/cinny:v4.12.7
+    restart: unless-stopped
+    profiles: [cinny]
+    volumes:
+      - ./data/cinny.json:/usr/share/nginx/html/config.json:ro
+    ports:
+      - "127.0.0.1:18081:80"
+    networks: [frontend]
+
+networks:
+  backend:
+    internal: true
+  frontend: {}

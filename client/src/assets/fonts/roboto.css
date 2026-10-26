@@ -162,3 +162,12 @@
   font-display: swap;
   src: url('Nunito-ExtraBold.woff2') format('woff2');
 }
+/* Persian and Arabic script: Vazirmatn (SIL Open Font License), merged into the Roboto family by unicode range */
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(Vazirmatn-Variable.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-089F, U+08A0-08FF, U+200C-200F, U+FB50-FDFF, U+FE70-FEFF;
+}

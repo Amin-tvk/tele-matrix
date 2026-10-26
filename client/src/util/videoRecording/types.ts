@@ -8,6 +8,7 @@ export type Result = {
 
 export type ActiveVideoRecording = {
   previewStream: MediaStream;
+  switchCamera: () => Promise<{ previewStream: MediaStream; isFrontCamera: boolean } | undefined>;
   stop: () => Promise<Result>;
   cancel: () => void;
   pause: () => Promise<void>;

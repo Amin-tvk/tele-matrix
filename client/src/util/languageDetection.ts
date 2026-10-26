@@ -7,8 +7,6 @@ import { IS_TRANSLATION_DETECTOR_SUPPORTED, IS_TRANSLATION_SUPPORTED } from './b
 import Deferred from './Deferred';
 import { createConnector } from './PostMessageConnector';
 
-const DETECTOR_INIT_DELAY = 4000;
-
 const DEFAULT_THRESHOLD = 0.2;
 const DEFAULT_LABELS_COUNT = 5;
 
@@ -18,9 +16,6 @@ let worker: Connector<FastTextApi> | undefined;
 let languageDetector: LanguageDetector | undefined;
 const initializationDeferred = new Deferred();
 
-if (IS_TRANSLATION_SUPPORTED) {
-  setTimeout(initLanguageDetection, DETECTOR_INIT_DELAY);
-}
 
 async function initLanguageDetection() {
   if (isInitialized()) return;
@@ -48,7 +43,12 @@ function isInitialized() {
 }
 
 export async function detectLanguage(text: string, threshold = DEFAULT_THRESHOLD): Promise<string | undefined> {
-  if (!isInitialized()) await initializationDeferred.promise;
+  // The detector (a 1 MB WASM model) is only loaded once translations actually need it
+  if (!isInitialized()) {
+    if (!IS_TRANSLATION_SUPPORTED) return undefined;
+    void initLanguageDetection();
+    await initializationDeferred.promise;
+  }
 
   if (languageDetector) {
     try {
@@ -76,7 +76,11 @@ export async function detectLanguage(text: string, threshold = DEFAULT_THRESHOLD
 export async function detectLanguageProbability(
   text: string, labelsCount = DEFAULT_LABELS_COUNT, threshold = DEFAULT_THRESHOLD,
 ): Promise<LanguageDetectionResult[] | undefined> {
-  if (!isInitialized()) await initializationDeferred.promise;
+  if (!isInitialized()) {
+    if (!IS_TRANSLATION_SUPPORTED) return undefined;
+    void initLanguageDetection();
+    await initializationDeferred.promise;
+  }
   if (languageDetector) {
     try {
       const results = await languageDetector.detect(text);

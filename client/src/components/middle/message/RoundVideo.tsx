@@ -5,6 +5,7 @@ import {
 import { getActions } from '../../../global';
 
 import type { ApiMessage } from '../../../api/types';
+import type { GlobalState } from '../../../global/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import { ApiMediaFormat } from '../../../api/types';
 
@@ -13,16 +14,22 @@ import {
   getVideoMediaHash,
   hasMessageTtl,
 } from '../../../global/helpers';
+import { selectTabState } from '../../../global/selectors';
 import { stopCurrentAudio } from '../../../util/audioPlayback/playbackController';
 import buildClassName from '../../../util/buildClassName';
 import { formatMediaDuration } from '../../../util/dates/duration';
 import safePlay from '../../../util/safePlay';
 import { ROUND_VIDEO_DIMENSIONS_PX } from '../../common/helpers/mediaDimensions';
+import {
+  formatPlaybackRate, getActivePlaybackRate, getNextPlaybackRate, REGULAR_PLAYBACK_RATE,
+} from '../../common/helpers/playbackRates';
 
+import useSelector from '../../../hooks/data/useSelector';
 import useThumbnail from '../../../hooks/media/useThumbnail';
 import { useThrottledSignal } from '../../../hooks/useAsyncResolvers';
 import useFlag from '../../../hooks/useFlag';
 import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMediaTransition from '../../../hooks/useMediaTransition';
 import useMediaWithLoadProgress from '../../../hooks/useMediaWithLoadProgress';
@@ -61,6 +68,14 @@ const PROGRESS_CENTER = ROUND_VIDEO_DIMENSIONS_PX / 2;
 const PROGRESS_MARGIN = 6;
 const PROGRESS_CIRCUMFERENCE = (PROGRESS_CENTER - PROGRESS_MARGIN) * 2 * Math.PI;
 const PROGRESS_THROTTLE = 16; // Min period needed for `playerEl.currentTime` to update
+// Touches farther from the center than this share of the radius grab the progress ring to seek, like in Telegram
+const SEEK_RING_MIN_DISTANCE = 0.55;
+
+// Video messages follow the speed chosen for voice messages
+const selectPlaybackRate = (global: GlobalState) => {
+  const { playbackRate, isPlaybackRateActive } = selectTabState(global).audioPlayer;
+  return getActivePlaybackRate(playbackRate, isPlaybackRateActive);
+};
 
 let stopPrevious: NoneToVoidFunction;
 
@@ -84,7 +99,10 @@ const RoundVideo = ({
   const playerRef = useRef<HTMLVideoElement>();
   const circleRef = useRef<SVGCircleElement>();
 
-  const { cancelMediaDownload, openOneTimeMediaModal, transcribeAudio } = getActions();
+  const {
+    cancelMediaDownload, openOneTimeMediaModal, transcribeAudio, setAudioPlayerPlaybackRate,
+  } = getActions();
+  const lang = useLang();
 
   const isIntersecting = useIsIntersecting(ref, observeIntersection);
 
@@ -153,6 +171,21 @@ const RoundVideo = ({
   }, [isActivated, getThrottledProgress]);
 
   const shouldPlay = Boolean(fullMediaData && isIntersecting);
+  const playbackRate = useSelector(selectPlaybackRate);
+
+  useEffect(() => {
+    const playerEl = playerRef.current;
+    if (playerEl) playerEl.playbackRate = isActivated ? playbackRate : REGULAR_PLAYBACK_RATE;
+  }, [isActivated, playbackRate, fullMediaData]);
+
+  const handlePlaybackRateClick = useLastCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextRate = getNextPlaybackRate(playbackRate);
+    setAudioPlayerPlaybackRate({
+      playbackRate: nextRate,
+      isPlaybackRateActive: nextRate !== REGULAR_PLAYBACK_RATE,
+    });
+  });
 
   const stopPlaying = useLastCallback(() => {
     if (!playerRef.current) {
@@ -196,8 +229,93 @@ const RoundVideo = ({
     togglePlaying();
   }, [isInOneTimeModal]);
 
+  const isSeekingRef = useRef(false);
+  const wasSeekingRef = useRef(false);
+
+  // Seeking by dragging along the progress ring of a playing video
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || !isActivated || isInOneTimeModal) return undefined;
+
+    const getSeekFraction = (e: PointerEvent | TouchEvent) => {
+      const point = 'touches' in e ? e.touches[0] : e;
+      if (!point) return undefined;
+      const { left, top, width } = element.getBoundingClientRect();
+      const radius = width / 2;
+      const x = point.clientX - left - radius;
+      const y = point.clientY - top - radius;
+      if (Math.hypot(x, y) < radius * SEEK_RING_MIN_DISTANCE) return undefined;
+      // Angle from 12 o'clock, clockwise
+      const angle = Math.atan2(x, -y);
+      return (angle < 0 ? angle + 2 * Math.PI : angle) / (2 * Math.PI);
+    };
+
+    const seekTo = (fraction: number) => {
+      const playerEl = playerRef.current;
+      if (!playerEl || !Number.isFinite(playerEl.duration)) return;
+      playerEl.currentTime = fraction * playerEl.duration;
+      setProgress(fraction);
+      setCurrentTime(Math.floor(playerEl.currentTime));
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Keeps the message from treating the drag as a swipe to reply
+      if (getSeekFraction(e) !== undefined) e.stopPropagation();
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if ((e.target as HTMLElement).closest('.transcribe-button, .round-video-speed')) return;
+      const fraction = getSeekFraction(e);
+      if (fraction === undefined) return;
+      isSeekingRef.current = true;
+      wasSeekingRef.current = false;
+      element.setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isSeekingRef.current) return;
+      const fraction = getSeekFraction(e);
+      if (fraction === undefined) return;
+      wasSeekingRef.current = true;
+      seekTo(fraction);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      if (!isSeekingRef.current) return;
+      isSeekingRef.current = false;
+      const fraction = getSeekFraction(e);
+      // A tap on the ring seeks too, instead of pausing
+      if (fraction !== undefined) {
+        wasSeekingRef.current = true;
+        seekTo(fraction);
+      }
+    };
+
+    const handlePointerCancel = () => {
+      isSeekingRef.current = false;
+    };
+
+    element.addEventListener('touchstart', handleTouchStart, { passive: true });
+    element.addEventListener('pointerdown', handlePointerDown);
+    element.addEventListener('pointermove', handlePointerMove);
+    element.addEventListener('pointerup', handlePointerUp);
+    element.addEventListener('pointercancel', handlePointerCancel);
+    return () => {
+      element.removeEventListener('touchstart', handleTouchStart);
+      element.removeEventListener('pointerdown', handlePointerDown);
+      element.removeEventListener('pointermove', handlePointerMove);
+      element.removeEventListener('pointerup', handlePointerUp);
+      element.removeEventListener('pointercancel', handlePointerCancel);
+    };
+  }, [isActivated, isInOneTimeModal, setProgress]);
+
   const handleClick = useLastCallback((event) => {
     if (event.target.closest('.transcribe-button')) {
+      return;
+    }
+
+    if (wasSeekingRef.current) {
+      wasSeekingRef.current = false;
       return;
     }
 
@@ -269,6 +387,7 @@ const RoundVideo = ({
         'RoundVideo',
         'media-inner',
         isInOneTimeModal && 'non-interactive',
+        isActivated && !isInOneTimeModal && 'seekable',
         className,
       )}
       onClick={handleClick}
@@ -345,6 +464,16 @@ const RoundVideo = ({
           {isActivated ? formatMediaDuration(currentTime) : formatMediaDuration(video.duration)}
           {(!isActivated || playerRef.current!.paused) && <Icon name="muted" className="muted-icon" />}
         </MediaBadge>
+      )}
+      {isActivated && !isInOneTimeModal && (
+        <button
+          type="button"
+          className={buildClassName('round-video-speed', playbackRate !== REGULAR_PLAYBACK_RATE && 'applied')}
+          aria-label={lang('AudioPlaybackRate')}
+          onClick={handlePlaybackRateClick}
+        >
+          {formatPlaybackRate(playbackRate)}
+        </button>
       )}
       {canTranscribe && (
         <Button

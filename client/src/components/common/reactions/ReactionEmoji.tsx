@@ -9,6 +9,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import { EMOJI_SIZE_PICKER } from '../../../config';
 import { getDocumentMediaHash, isSameReaction } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
+import { getEmojiImageUrl } from '../../../util/emoji/emoji';
 import { LOCAL_TGS_URLS } from '../helpers/animatedAssets';
 
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
@@ -111,6 +112,14 @@ const ReactionEmoji: FC<OwnProps> = ({
           sharedCanvasHqRef={sharedCanvasHqRef}
           withTranslucentThumb
           forceAlways={forcePlayback}
+        />
+      ) : reaction.type === 'emoji' && !animationId ? (
+        // Servers without reaction animations only provide the emoticon itself
+        <img
+          className={styles.staticEmoji}
+          src={getEmojiImageUrl(reaction.emoticon)}
+          alt={reaction.emoticon}
+          draggable={false}
         />
       ) : (
         <AnimatedIconWithPreview

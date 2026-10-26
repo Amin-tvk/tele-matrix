@@ -33,7 +33,6 @@ import usePreviousDeprecated from '../../../hooks/usePreviousDeprecated';
 import ManageUsernames from '../../common/ManageUsernames';
 import ChatOrUserPicker from '../../common/pickers/ChatOrUserPicker';
 import SafeLink from '../../common/SafeLink';
-import UsernameInput from '../../common/UsernameInput';
 import Island, { IslandDescription, IslandOutside, IslandTitle } from '../../gili/layout/Island';
 import Surface from '../../gili/layout/Surface';
 import AvatarEditable from '../../ui/AvatarEditable';
@@ -241,11 +240,6 @@ const SettingsEditProfile = ({
     setIsProfileFieldsTouched(true);
   });
 
-  const handleUsernameChange = useLastCallback((value: string | false) => {
-    setEditableUsername(value);
-    setIsUsernameTouched(currentUsername !== value);
-  });
-
   const handleBirthdayPrivacyClick = useLastCallback(() => {
     openSettingsScreen({ screen: SettingsScreens.PrivacyBirthday });
   });
@@ -398,12 +392,12 @@ const SettingsEditProfile = ({
         <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('Username')}</IslandTitle>
         <Island>
           <div className="settings-input">
-            <UsernameInput
-              currentUsername={currentUsername}
-              isLoading={isLoading}
-              isUsernameAvailable={isUsernameAvailable}
-              checkedUsername={checkedUsername}
-              onChange={handleUsernameChange}
+            {/* Matrix user IDs are permanent, so the username is shown but cannot be edited */}
+            <InputText
+              label={lang('Username')}
+              value={currentUsername ? `@${currentUsername}` : ''}
+              readOnly
+              disabled
             />
           </div>
         </Island>
@@ -411,16 +405,6 @@ const SettingsEditProfile = ({
         <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
           {renderText(lang('UsernameHelp'), ['br', 'simple_markdown'])}
         </IslandDescription>
-        {editableUsername && (
-          <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
-            {lang('UsernameLink')}
-            <br />
-            <span className="username-link">
-              {TME_LINK_PREFIX}
-              {editableUsername}
-            </span>
-          </IslandDescription>
-        )}
 
         {shouldRenderUsernamesManage && (
           <ManageUsernames

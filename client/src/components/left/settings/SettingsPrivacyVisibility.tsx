@@ -4,6 +4,7 @@ import { getActions, withGlobal } from '../../../global';
 import type { ApiPhoto, ApiPrivacySettings, BotsPrivacyType } from '../../../api/types';
 import { SettingsScreens } from '../../../types';
 
+import { IS_TELEGRAM_SERVICES_ENABLED } from '../../../config';
 import { selectIsCurrentUserPremium, selectUserFullInfo } from '../../../global/selectors';
 import { getPrivacyKey } from './helpers/privacy';
 
@@ -127,7 +128,8 @@ const SettingsPrivacyVisibility = ({
           currentUserFallbackPhoto={currentUserFallbackPhoto}
         />
       )}
-      {screen === SettingsScreens.PrivacyLastSeen && (
+      {/* Hiding read times and the Premium upsell have no Matrix counterpart */}
+      {IS_TELEGRAM_SERVICES_ENABLED && screen === SettingsScreens.PrivacyLastSeen && (
         <SettingsPrivacyLastSeen visibility={primaryPrivacy?.visibility} />
       )}
       {screen === SettingsScreens.PrivacyGifts && (
@@ -208,7 +210,7 @@ function PrivacySubsection({
       case SettingsScreens.PrivacySavedMusic:
         return lang('PrivacyMusicInfo');
       case SettingsScreens.PrivacyLastSeen:
-        return lang('CustomHelp');
+        return lang('PeyvandLastSeenHelp');
       case SettingsScreens.PrivacyAddByPhone: {
         return privacy?.visibility === 'everybody' ? lang('PrivacyPhoneInfo') : lang('PrivacyPhoneInfo3');
       }

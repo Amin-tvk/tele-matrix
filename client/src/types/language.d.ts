@@ -3321,9 +3321,118 @@ export interface LangPair {
   'GroupCallsUnsupported': undefined;
   'MiniAppQrScanUnsupported': undefined;
   'PageTitleInactive': undefined;
+  'MatrixLoginTitle': undefined;
+  'MatrixLoginDescription': undefined;
+  'MatrixRegisterTitle': undefined;
+  'MatrixRegisterDescription': undefined;
+  'MatrixUsername': undefined;
+  'MatrixPassword': undefined;
+  'MatrixPasswordRepeat': undefined;
+  'MatrixDisplayName': undefined;
+  'MatrixInviteToken': undefined;
+  'MatrixLoginButton': undefined;
+  'MatrixRegisterButton': undefined;
+  'MatrixSwitchToRegister': undefined;
+  'MatrixSwitchToLogin': undefined;
+  'MatrixErrorFillFields': undefined;
+  'MatrixErrorInvalidCredentials': undefined;
+  'MatrixErrorTooManyAttempts': undefined;
+  'MatrixErrorUnknown': undefined;
+  'MatrixErrorNetwork': undefined;
+  'MatrixErrorInvalidUsername': undefined;
+  'MatrixErrorUsernameTaken': undefined;
+  'MatrixErrorWeakPassword': undefined;
+  'MatrixErrorInvalidToken': undefined;
+  'MatrixErrorPasswordsMismatch': undefined;
+  'MatrixRecoveryTitle': undefined;
+  'MatrixRecoveryDescription': undefined;
+  'MatrixRecoveryKey': undefined;
+  'MatrixRecoveryRestore': undefined;
+  'MatrixRecoveryErrorWrongKey': undefined;
+  'MatrixRecoveryErrorNoBackup': undefined;
+  'MatrixRecoveryErrorUnknown': undefined;
+  'MatrixRecoveryPrompt': undefined;
+  'MatrixRecoveryEnter': undefined;
+  'MatrixEncryptionSettings': undefined;
+  'MatrixEncryptionSettingsDesc': undefined;
+  'MatrixRecoveryForgot': undefined;
+  'MatrixSetupTitle': undefined;
+  'MatrixSetupDescription': undefined;
+  'MatrixSetupPassphrase': undefined;
+  'MatrixSetupPassphraseHint': undefined;
+  'MatrixSetupPassword': undefined;
+  'MatrixSetupCreate': undefined;
+  'MatrixSetupPasswordNeeded': undefined;
+  'MatrixSetupWrongPassword': undefined;
+  'MatrixSetupKeyTitle': undefined;
+  'MatrixSetupKeyDescription': undefined;
+  'MatrixSetupKeyWarning': undefined;
+  'MatrixSetupKeySaved': undefined;
+  'MatrixSetupKeyFileHeader': undefined;
+  'MatrixSetupPrompt': undefined;
+  'MatrixSetupAction': undefined;
+  'MatrixResetTitle': undefined;
+  'MatrixResetDescription': undefined;
+  'MatrixResetAction': undefined;
+  'MatrixReadyDescription': undefined;
+  'MatrixReadyChangeKey': undefined;
+  'MatrixReadyNewKey': undefined;
+  'PeyvandLastSeenDesc': undefined;
+  'PeyvandSwitchCamera': undefined;
+  'PeyvandLastSeenHelp': undefined;
+  'MatrixAdminTitle': undefined;
+  'MatrixAdminSettingsDesc': undefined;
+  'MatrixAdminUsers': undefined;
+  'MatrixAdminInvites': undefined;
+  'MatrixAdminSearchUsers': undefined;
+  'MatrixAdminAdminBadge': undefined;
+  'MatrixAdminDeactivatedBadge': undefined;
+  'MatrixAdminSendMessage': undefined;
+  'MatrixAdminMakeAdmin': undefined;
+  'MatrixAdminRemoveAdmin': undefined;
+  'MatrixAdminResetPassword': undefined;
+  'MatrixAdminReactivate': undefined;
+  'MatrixAdminNewPassword': undefined;
+  'MatrixAdminPasswordChanged': undefined;
+  'MatrixAdminReactivated': undefined;
+  'MatrixAdminLogoutDevices': undefined;
+  'MatrixAdminLogoutConfirm': undefined;
+  'MatrixAdminLoggedOut': undefined;
+  'MatrixAdminDeactivate': undefined;
+  'MatrixAdminDeactivateConfirm': undefined;
+  'MatrixAdminDeactivated': undefined;
+  'MatrixAdminCreateUser': undefined;
+  'MatrixAdminUsername': undefined;
+  'MatrixAdminPassword': undefined;
+  'MatrixAdminUserCreated': undefined;
+  'MatrixAdminCreateInvite': undefined;
+  'MatrixAdminInviteUses': undefined;
+  'MatrixAdminInviteDays': undefined;
+  'MatrixAdminInviteHint': undefined;
+  'MatrixAdminInviteCreated': undefined;
+  'MatrixAdminLinkCopied': undefined;
+  'MatrixAdminNoInvites': undefined;
+  'MatrixAdminDeleteInvite': undefined;
+  'MatrixAdminDeleteInviteConfirm': undefined;
+  'MatrixAdminError': undefined;
+  'MatrixAdminSaved': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
+  'MatrixAdminJoined': {
+    'date': V;
+  };
+  'MatrixAdminStats': {
+    'users': V;
+    'rooms': V;
+  };
+  'MatrixAdminInviteUsage': {
+    'used': V;
+    'total': V;
+  };
+  'MatrixAdminInviteExpires': {
+    'date': V;
+  };
   'UserTyping': {
     'user': V;
   };
@@ -6252,6 +6361,9 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'PageTitleNotifications': {
+    'count': V;
+  };
+  'MatrixRecoveryDone': {
     'count': V;
   };
 }

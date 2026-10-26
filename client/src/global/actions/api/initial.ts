@@ -60,6 +60,13 @@ let isInitializingApi = false;
 
 const API_DESTROY_TIMEOUT_MS = 3000;
 
+// Connections often die while the page is in the background, so returning to it reconnects right away
+function retryConnectionNow() {
+  if (document.visibilityState === 'visible') void callApi('retryConnectionNow');
+}
+document.addEventListener('visibilitychange', retryConnectionNow);
+window.addEventListener('online', retryConnectionNow);
+
 addActionHandler('initApi', async (global, actions): Promise<void> => {
   if (isInitializingApi) return;
   isInitializingApi = true;
@@ -135,6 +142,24 @@ addActionHandler('setAuthCode', (global, actions, payload): ActionReturnType => 
   const { code } = payload;
 
   void callApi('provideAuthCode', code);
+
+  return updateAuth(global, {
+    isLoading: true,
+    errorKey: undefined,
+  });
+});
+
+addActionHandler('matrixLogin', (global, actions, payload): ActionReturnType => {
+  void callApi('provideMatrixLogin', payload);
+
+  return updateAuth(global, {
+    isLoading: true,
+    errorKey: undefined,
+  });
+});
+
+addActionHandler('matrixRegister', (global, actions, payload): ActionReturnType => {
+  void callApi('provideMatrixRegistration', payload);
 
   return updateAuth(global, {
     isLoading: true,

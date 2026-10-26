@@ -1,0 +1,71 @@
+.root :global(.modal-dialog) {
+  max-width: 26rem;
+}
+
+.description {
+  margin-bottom: 1.25rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+.hint {
+  margin: -0.75rem 0 1.25rem;
+  padding: 0 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+.error {
+  margin-bottom: 1rem;
+  color: var(--color-error);
+}
+
+.warning {
+  font-size: 0.875rem;
+}
+
+.link {
+  margin: -0.5rem 0 0.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--color-links);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.recoveryKey {
+  padding: 0.875rem 1rem;
+  border-radius: var(--border-radius-default);
+  background: var(--color-background-secondary);
+  font-family: var(--font-family-monospace);
+  font-size: 1rem;
+  line-height: 1.6;
+  text-align: center;
+  word-spacing: 0.25rem;
+  user-select: all;
+}
+
+.keyActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 0.75rem 0 1rem;
+
+  :global(.Button) {
+    flex: 0 0 auto;
+    width: auto;
+    margin: 0;
+    padding-inline: 1rem;
+  }
+}
+
+.loading {
+  height: 6rem;
+}

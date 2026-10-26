@@ -42,10 +42,9 @@ export function selectIsUserChatProtected<T extends GlobalState>(global: T, user
   return Boolean(fullInfo.noForwardsMyEnabled || fullInfo.noForwardsPeerEnabled);
 }
 
+// Peyvand has no paid tier: every signed-in user gets the features Telegram reserves for Premium
 export function selectIsCurrentUserPremium<T extends GlobalState>(global: T) {
-  if (!global.currentUserId) return false;
-
-  return Boolean(global.users.byId[global.currentUserId].isPremium);
+  return Boolean(global.currentUserId);
 }
 
 export function selectIsCurrentUserFrozen<T extends GlobalState>(global: T) {

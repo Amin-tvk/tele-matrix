@@ -20,6 +20,8 @@ import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../api/types';
 
 import {
   ALL_FOLDER_ID,
+  ANIMATION_LEVEL_MAX,
+  ANIMATION_LEVEL_MED,
   ARCHIVED_FOLDER_ID,
   DEBUG,
   EPHEMERAL_MESSAGE_TTL_SECONDS,
@@ -285,6 +287,19 @@ export function migrateSharedCache(
         performance,
         themes: cachedSettings?.themes
           || (fallbackThemes ? cloneThemeSettings(fallbackThemes) : initialState.settings.themes),
+      },
+    };
+  }
+
+  // Full animations became the default: settings nobody chose by hand move up to them
+  const migratedSettings = migrated.settings;
+  if (!migratedSettings.wasAnimationLevelSetManually && migratedSettings.animationLevel === ANIMATION_LEVEL_MED) {
+    migrated = {
+      ...migrated,
+      settings: {
+        ...migratedSettings,
+        animationLevel: ANIMATION_LEVEL_MAX,
+        performance: { ...migratedSettings.performance, ...initialState.settings.performance },
       },
     };
   }

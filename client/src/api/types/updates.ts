@@ -857,6 +857,10 @@ export type ApiUpdateFailedMessageTranslations = {
   tone?: TranslationTone;
 };
 
+export type ApiUpdateEncryptionKeysMissing = {
+  '@type': 'updateEncryptionKeysMissing';
+};
+
 export type ApiUpdateFetchingDifference = {
   '@type': 'updateFetchingDifference';
   isFetching: boolean;
@@ -1034,7 +1038,7 @@ export type ApiUpdateWebPage = {
 };
 
 export type ApiUpdate = (
-  ApiUpdateReady | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
+  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
   ApiUpdateAuthorizationState | ApiUpdateAuthorizationError | ApiUpdateConnectionState | ApiUpdateCurrentUser |
   ApiUpdateChat | ApiUpdateChatTypingStatus | ApiUpdateChatFullInfo | ApiUpdatePinnedChatIds |
   ApiUpdateChatMembers | ApiUpdateChatParticipantRank | ApiUpdateChatJoin | ApiUpdateChatLeave

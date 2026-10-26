@@ -19,6 +19,8 @@ const useVideoRecording = () => {
   const [isVideoRecordingReady, setIsVideoRecordingReady] = useState(false);
   const [isVideoRecordingPaused, setIsVideoRecordingPaused] = useState(false);
   const [isRecordingFinished, setIsRecordingFinished] = useState(false);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
+  const [canSwitchCamera, setCanSwitchCamera] = useState(false);
 
   const activeRecordingRef = useRef<videoRecording.ActiveVideoRecording>();
   const resultPromiseRef = useRef<Promise<videoRecording.Result>>();
@@ -35,6 +37,7 @@ const useVideoRecording = () => {
     setIsVideoRecordingReady(false);
     setIsVideoRecordingPaused(false);
     setIsRecordingFinished(false);
+    setIsFrontCamera(true);
   });
 
   const finishRecordingVideo = useLastCallback(() => {
@@ -85,6 +88,10 @@ const useVideoRecording = () => {
       recording.whenReady.then(() => {
         if (startTokenRef.current !== token) return;
         setIsVideoRecordingReady(true);
+        // Device labels and the full list are only known once camera access is granted
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          setCanSwitchCamera(devices.filter(({ kind }) => kind === 'videoinput').length > 1);
+        }, () => undefined);
       }, (err: unknown) => {
         if (startTokenRef.current !== token) return;
         showNotification({ message: { key: 'VideoMessageRecordError' } });
@@ -130,6 +137,22 @@ const useVideoRecording = () => {
 
     active.resume();
     setIsVideoRecordingPaused(false);
+  });
+
+  const switchVideoCamera = useLastCallback(async () => {
+    const active = activeRecordingRef.current;
+    if (!active || resultPromiseRef.current) return;
+
+    try {
+      const result = await active.switchCamera();
+      if (!result || activeRecordingRef.current !== active) return;
+      setPreviewStream(result.previewStream);
+      setIsFrontCamera(result.isFrontCamera);
+    } catch (err) {
+      showNotification({ message: { key: 'VideoMessageRecordError' } });
+      // eslint-disable-next-line no-console
+      console.error(err);
+    }
   });
 
   const stopRecordingVideo = useLastCallback(() => {
@@ -189,6 +212,9 @@ const useVideoRecording = () => {
     discardRecordingVideo,
     pauseRecordingVideo,
     resumeRecordingVideo,
+    switchVideoCamera,
+    isFrontCamera,
+    canSwitchCamera,
     activeVideoRecording,
     previewStream,
     isVideoRecordingStarting,

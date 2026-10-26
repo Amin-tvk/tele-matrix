@@ -6,6 +6,9 @@ import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import buildClassName from '../../../util/buildClassName';
 import safePlay from '../../../util/safePlay';
 
+import useLang from '../../../hooks/useLang';
+
+import Icon from '../../common/icons/Icon';
 import Skeleton from '../../ui/placeholder/Skeleton';
 import Portal from '../../ui/Portal';
 
@@ -17,6 +20,9 @@ type OwnProps = {
   isReady?: boolean;
   isPaused?: boolean;
   isFrozen?: boolean;
+  isMirrored?: boolean;
+  canSwitchCamera?: boolean;
+  onSwitchCamera?: NoneToVoidFunction;
   getProgress: () => number;
   getPlaybackEl?: () => HTMLVideoElement | undefined;
 };
@@ -33,8 +39,10 @@ const POSTER_CAPTURE_PROGRESS = MAX_ROUND_VIDEO_RECORDING_DURATION > POSTER_CAPT
   : 0.5;
 
 const RoundVideoRecorder = ({
-  ref, previewStream, isReady, isPaused, isFrozen, getProgress, getPlaybackEl,
+  ref, previewStream, isReady, isPaused, isFrozen, isMirrored, canSwitchCamera, onSwitchCamera,
+  getProgress, getPlaybackEl,
 }: OwnProps) => {
+  const lang = useLang();
   const videoRef = useRef<HTMLVideoElement>();
   const posterRef = useRef<HTMLCanvasElement>();
   const circleRef = useRef<SVGCircleElement>();
@@ -132,11 +140,11 @@ const RoundVideoRecorder = ({
       <div ref={ref} className={buildClassName(styles.root, !isReady && styles.preparing)}>
         <canvas
           ref={posterRef}
-          className={buildClassName(styles.video, !isFrozen && styles.hidden)}
+          className={buildClassName(styles.video, isMirrored && styles.mirrored, !isFrozen && styles.hidden)}
         />
         <video
           ref={videoRef}
-          className={buildClassName(styles.video, isFrozen && styles.hidden)}
+          className={buildClassName(styles.video, isMirrored && styles.mirrored, isFrozen && styles.hidden)}
         />
         <div ref={playbackLayerRef} className={styles.playbackLayer} />
         <div className={buildClassName(styles.waitingMask, isReady && styles.waitingMaskHidden)}>
@@ -155,6 +163,16 @@ const RoundVideoRecorder = ({
             stroke-dashoffset={CIRCUMFERENCE}
           />
         </svg>
+        {canSwitchCamera && isReady && (
+          <button
+            type="button"
+            className={styles.switchCamera}
+            aria-label={lang('PeyvandSwitchCamera')}
+            onClick={onSwitchCamera}
+          >
+            <Icon name="flip" />
+          </button>
+        )}
       </div>
     </Portal>
   );

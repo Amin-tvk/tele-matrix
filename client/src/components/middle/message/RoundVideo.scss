@@ -8,6 +8,11 @@
     pointer-events: none;
   }
 
+  // While playing, a drag along the ring seeks instead of scrolling the chat
+  &.seekable {
+    touch-action: none;
+  }
+
   .video-wrapper {
     position: absolute;
     top: 0;
@@ -25,6 +30,35 @@
 
   .thumbnail {
     border-radius: 50%;
+  }
+
+  .round-video-speed {
+    cursor: pointer;
+
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    right: 0;
+
+    min-width: 2.5rem;
+    height: 1.5rem;
+    padding: 0 0.5rem;
+    border: none;
+    border-radius: 0.75rem;
+
+    font-size: 0.8125rem;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.5rem;
+    color: #fff;
+
+    background-color: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(0.5rem);
+
+    transition: background-color 150ms;
+
+    &.applied {
+      background-color: var(--color-primary);
+    }
   }
 
   .progress {

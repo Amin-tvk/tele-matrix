@@ -110,3 +110,8 @@ export function isoToEmoji(iso: string) {
   const codePoints = [...code].map((c) => c.codePointAt(0)! + ISO_FLAGS_OFFSET);
   return String.fromCodePoint(...codePoints);
 }
+
+export function getEmojiImageUrl(emoji: string) {
+  const code = nativeToUnifiedExtendedWithCache(emoji);
+  return code ? `./img-apple-64/${code}.png` : undefined;
+}

@@ -1,4 +1,4 @@
-import { getActions } from '../global';
+import { getActions, getGlobal } from '../global';
 
 import { DEBUG, DEBUG_MORE, IS_TEST } from '../config';
 // eslint-disable-next-line import-x/default
@@ -28,9 +28,19 @@ function handleWorkerMessage(e: MessageEvent) {
   const dispatch = getActions();
   const payload = action.payload;
   switch (action.type) {
-    case 'focusMessage':
-      dispatch.focusMessage?.(payload as any);
+    case 'focusMessage': {
+      const { fallbackChatId, ...focusPayload } = payload as { chatId: string; fallbackChatId?: string; messageId?: number };
+      const chats = getGlobal().chats.byId;
+      // Matrix push notifications only know the room and sender, so the chat ID is resolved here
+      const chatId = !chats[focusPayload.chatId] && fallbackChatId && chats[fallbackChatId]
+        ? fallbackChatId : focusPayload.chatId;
+      if (focusPayload.messageId) {
+        dispatch.focusMessage?.({ ...focusPayload, chatId } as any);
+      } else {
+        dispatch.openChat({ id: chatId, shouldReplaceHistory: true });
+      }
       break;
+    }
     case 'playNotificationSound':
       playNotifySoundDebounced(action.payload.id);
       break;

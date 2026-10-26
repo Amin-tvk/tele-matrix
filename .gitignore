@@ -1,0 +1,21 @@
+# Secrets and runtime data created by scripts/setup.sh — never commit these
+.env
+server/data/
+
+# Client build output and dependencies
+client/node_modules/
+client/dist/
+client/dist-dev/
+
+# Test run data: accounts, tokens, browser profiles, screenshots
+tests/e2e/creds.txt
+tests/e2e/tok*
+tests/e2e/*_room
+tests/e2e/recovery_key
+tests/e2e/profile-*/
+tests/e2e/out/
+
+*.pem
+*.key
+*.log
+.DS_Store

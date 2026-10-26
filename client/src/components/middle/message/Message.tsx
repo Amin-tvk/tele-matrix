@@ -75,6 +75,7 @@ import {
   isReplyToMessage,
   isSystemBot,
 } from '../../../global/helpers';
+import { MAX_ENLARGED_EMOJI_COUNT } from '../../../global/helpers/getEmojiOnlyCountForMessage';
 import { getPeerFullTitle, getPeerTitle } from '../../../global/helpers/peers';
 import { getEphemeralReplyInfo, getMessageReplyInfo, getStoryReplyInfo } from '../../../global/helpers/replies';
 import {
@@ -957,7 +958,9 @@ const Message = ({
   }), hasWideMedia && 'with-wide-media');
 
   const withAppendix = contentClassName.includes('has-appendix');
-  const emojiSize = getCustomEmojiSize(text?.emojiOnlyCount);
+  const emojiOnlyCount = text?.emojiOnlyCount && text.emojiOnlyCount <= MAX_ENLARGED_EMOJI_COUNT
+    ? text.emojiOnlyCount : undefined;
+  const emojiSize = getCustomEmojiSize(emojiOnlyCount);
 
   const paidMessageStarsInMeta = !isChatWithUser
     ? (isAlbum && paidMessageStars ? album.messages.length * paidMessageStars : paidMessageStars)
@@ -2258,10 +2261,8 @@ export default memo(withGlobal<OwnProps>(
     const senderBoosts = sender && selectIsChatWithSelf(global, sender.id)
       ? (boostsApplied ?? message.senderBoosts) : message.senderBoosts;
 
-    const chatLevel = chat?.boostLevel || 0;
-    const transcribeMinLevel = global.appConfig.groupTranscribeLevelMin;
-    const canTranscribeVoice = !message.isEphemeral
-      && (isPremium || Boolean(transcribeMinLevel && chatLevel >= transcribeMinLevel));
+    // Voice transcription runs on Telegram's servers and is not available with Matrix
+    const canTranscribeVoice = false;
 
     const viaBusinessBot = viaBusinessBotId ? selectUser(global, viaBusinessBotId) : undefined;
 

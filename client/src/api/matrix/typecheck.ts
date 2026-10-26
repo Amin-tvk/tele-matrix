@@ -1,0 +1,31 @@
+// Compile-time check that Matrix implementations match the method signatures the UI calls.
+// Not imported at runtime
+
+import type { Methods } from '../gramjs/methods/types';
+import type * as auth from './auth';
+import type * as folders from './folders';
+import type * as lastSeen from './lastSeen';
+import type * as methods from './methods';
+
+type Implementations = typeof methods & typeof auth & typeof folders & typeof lastSeen;
+// Results differ in optional fields or are raw request results; callers only check that the call succeeded
+type TruthyResultMethods = 'deleteChatMember' | 'leaveChannel' | 'deleteChatUser' | 'deleteChat' | 'deleteChannel'
+  | 'editChatPhoto' | 'toggleChatArchived' | 'updateChatAdmin' | 'updateProfile' | 'sendReaction' | 'addChatMembers'
+  | 'fetchChat' | 'uploadProfilePhoto' | 'fetchChatFolders' | 'fetchMessages' | 'sendMessageLocal' | 'sendMessage'
+  | 'editMessage' | 'fetchFullUser' | 'registerDevice' | 'unregisterDevice'
+  | 'updateNotificationSettings' | 'sortChatFolders' | 'toggleDialogFilterTags' | 'deleteChatFolder'
+  | 'editChatFolder' | 'editTodo' | 'toggleTodoCompleted' | 'appendTodoList';
+type Overlap = Exclude<Extract<keyof Implementations, keyof Methods>, TruthyResultMethods>;
+
+type CheckedMethods = {
+  [K in Overlap]: (...args: Parameters<Methods[K]>) => Promise<Awaited<ReturnType<Methods[K]>>>
+    | ReturnType<Methods[K]>;
+};
+
+// Names of implementations that do not accept the UI arguments or return an incompatible result
+export type MismatchedMethods = {
+  [K in Overlap]: Implementations[K] extends CheckedMethods[K] ? never : K;
+}[Overlap];
+
+// Fails to compile listing every mismatched method name
+export const METHODS_CHECK: Record<MismatchedMethods, true> = {};

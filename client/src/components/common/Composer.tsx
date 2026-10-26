@@ -930,6 +930,9 @@ const Composer = ({
     discardRecordingVideo,
     pauseRecordingVideo,
     resumeRecordingVideo,
+    switchVideoCamera,
+    isFrontCamera,
+    canSwitchCamera,
     activeVideoRecording,
     previewStream,
     isVideoRecordingStarting,
@@ -3160,6 +3163,9 @@ const Composer = ({
               isReady={isVideoRecordingReady}
               isPaused={isVideoRecordingPaused}
               isFrozen={isRecordingFinished}
+              isMirrored={isFrontCamera}
+              canSwitchCamera={canSwitchCamera && !isRecordingFinished && !isVideoRecordingPaused}
+              onSwitchCamera={switchVideoCamera}
               getProgress={getProgress}
               getPlaybackEl={renderedVideoRecording?.getPlaybackEl}
             />

@@ -3,6 +3,7 @@ import type { IAlbum } from '../../../../types';
 
 import { EMOJI_SIZES, MESSAGE_CONTENT_CLASS_NAME } from '../../../../config';
 import { getMessageContent, getRichMessageAudios } from '../../../../global/helpers';
+import { MAX_ENLARGED_EMOJI_COUNT } from '../../../../global/helpers/getEmojiOnlyCountForMessage';
 import getSingularPaidMedia from './getSingularPaidMedia';
 
 export function buildContentClassName(
@@ -84,7 +85,8 @@ export function buildContentClassName(
     classNames.push(peerColorClass);
   }
 
-  if (!isMedia && text?.emojiOnlyCount) {
+  // Messages cached before the limit was introduced may still carry larger counts
+  if (!isMedia && text?.emojiOnlyCount && text.emojiOnlyCount <= MAX_ENLARGED_EMOJI_COUNT) {
     classNames.push('emoji-only');
     if (text.emojiOnlyCount <= EMOJI_SIZES) {
       classNames.push(`emoji-only-${text.emojiOnlyCount}`);

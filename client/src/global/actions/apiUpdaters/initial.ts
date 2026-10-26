@@ -93,6 +93,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       actions.sync();
       break;
 
+    case 'updateEncryptionKeysMissing':
+      actions.checkEncryptionRecovery();
+      break;
+
     case 'updateFetchingDifference':
       global = { ...global, isFetchingDifference: update.isFetching };
       setGlobal(global);
