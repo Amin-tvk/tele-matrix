@@ -96,7 +96,7 @@ All containers listen on `127.0.0.1`. The host's nginx is the only public entry 
 ## 📂 Repository layout
 
 ```
-peyvand/
+tele-matrix/
 ├── client/                    # Web app: Telegram Web A + the Matrix layer
 │   └── src/api/matrix/        # ← the Matrix implementation of the client API
 ├── server/
@@ -128,8 +128,8 @@ peyvand/
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/Amin-tvk/peyvand.git
-cd peyvand
+git clone https://github.com/Amin-tvk/tele-matrix.git
+cd tele-matrix
 cp .env.example .env
 nano .env        # set APP_DOMAIN, MATRIX_DOMAIN, ADMIN_EMAIL, PUSH_APP_ID
 ```
