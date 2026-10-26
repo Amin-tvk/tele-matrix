@@ -6,9 +6,9 @@
 
 **A self-hosted messenger that looks and feels like Telegram, running on your own [Matrix](https://matrix.org) server.**
 
-End-to-end encryption · Your server, your data · Web app + installable PWA · One-command setup
+End-to-end encryption · Your server, your data · Web app + installable PWA · `docker compose up` and done
 
-[Features](#-features) · [Architecture](#-architecture) · [Install](#-install) · [Configuration](#-configuration) · [Development](#-development) · [Troubleshooting](#-troubleshooting)
+[Features](#-features) · [Install](#-install) · [Configuration](#-configuration) · [Architecture](#-architecture) · [Development](#-development) · [Troubleshooting](#-troubleshooting)
 
 <br>
 
@@ -63,9 +63,9 @@ flowchart LR
         SW["Service worker<br/>(push, media streaming)"]
     end
 
-    subgraph Server["🖥 Your server (Docker)"]
-        NG["nginx<br/>TLS + routing"]
-        WEB["web<br/>static app"]
+    subgraph Server["🐳 docker compose"]
+        CAD["Caddy<br/>automatic HTTPS"]
+        WEB["web<br/>the app"]
         SYN["Synapse<br/>homeserver"]
         MOD["last-seen<br/>privacy module"]
         PG[("PostgreSQL")]
@@ -73,11 +73,12 @@ flowchart LR
         KET["Ketesa<br/>admin UI"]
     end
 
-    UI -- "https://APP_DOMAIN" --> NG
-    ML -- "https://MATRIX_DOMAIN" --> NG
-    NG --> WEB
-    NG --> SYN
-    NG --> KET
+    UI -- "https://APP_DOMAIN" --> CAD
+    ML -- "https://MATRIX_DOMAIN" --> CAD
+    CAD --> WEB
+    CAD --> SYN
+    CAD --> KET
+    CAD --> SYG
     SYN --- MOD
     SYN --> PG
     SYN -- "push" --> SYG
@@ -89,162 +90,139 @@ flowchart LR
 |---|---|
 | `APP_DOMAIN` (e.g. `chat.example.com`) | The Peyvand web app |
 | `MATRIX_DOMAIN` (e.g. `matrix.example.com`) | Synapse (client and federation API), `/admin/` (Ketesa), the push gateway and `.well-known` |
-| `CINNY_DOMAIN` (optional) | [Cinny](https://cinny.in), a second Matrix web client |
 
-All containers listen on `127.0.0.1`. The host's nginx is the only public entry point.
-
-## 📂 Repository layout
-
-```
-tele-matrix/
-├── client/                    # Web app: Telegram Web A + the Matrix layer
-│   └── src/api/matrix/        # ← the Matrix implementation of the client API
-├── server/
-│   ├── compose.yml            # Synapse, Postgres, Sygnal, web, Ketesa, (Cinny)
-│   ├── synapse/modules/       # peyvand_last_seen.py: last-seen privacy module
-│   ├── templates/             # Config templates rendered by scripts/setup.sh
-│   └── data/                  # ← generated: configs, secrets, database (git-ignored)
-├── scripts/
-│   ├── setup.sh               # Generates every config, secret and key from .env
-│   ├── build-client.sh        # Builds the web app (in Docker) into server/data/www
-│   ├── create-admin.sh        # Creates a server admin
-│   └── new-invite.sh          # Creates a sign-up invite code
-├── tests/e2e/                 # Playwright end-to-end scripts
-├── brand/                     # Logo and icon generator
-└── .env.example               # The only file you need to edit
-```
+**Caddy** is the only container with public ports (80 and 443). It gets and renews Let's Encrypt certificates for both domains by itself.
 
 ## 🚀 Install
 
-### Requirements
+You need:
 
-- A Linux server with **2 GB RAM** or more (building the client needs about 4 GB, or add swap)
-- **Docker** with the Compose plugin, **nginx**, **openssl**, **rsync** and **certbot**
-- Two DNS records pointing to the server: one for the app, one for the homeserver (plus one more for Cinny)
+- a Linux server with **Docker** (Compose v2 included);
+- **2 GB RAM** or more (the first build of the app needs about 4 GB, or add swap);
+- **two DNS records** (A or AAAA) pointing to the server, one for the app and one for the homeserver;
+- ports **80** and **443** open.
+
+Nothing else is installed on the host: no nginx, certbot or Node.js.
 
 > [!IMPORTANT]
 > `MATRIX_DOMAIN` becomes part of every user ID (`@alice:matrix.example.com`) and **cannot be changed later**. Choose it carefully.
 
-### 1. Clone and configure
+### 1. Get the code and set your domains
 
 ```bash
 git clone https://github.com/Amin-tvk/tele-matrix.git
 cd tele-matrix
 cp .env.example .env
-nano .env        # set APP_DOMAIN, MATRIX_DOMAIN, ADMIN_EMAIL, PUSH_APP_ID
+nano .env
 ```
 
-### 2. Generate configs and secrets
+`.env` needs three values:
+
+```ini
+APP_DOMAIN=chat.example.com
+MATRIX_DOMAIN=matrix.example.com
+ADMIN_EMAIL=you@example.com
+```
+
+### 2. Start everything
 
 ```bash
-sudo scripts/setup.sh
+docker compose up -d
 ```
 
-This creates `server/data/` with:
+The first start takes a few minutes because it builds the app. On that start:
 
-- the Synapse config, including random secrets;
-- the database password;
-- the server's signing key;
-- the Web Push (VAPID) key pair;
-- the Sygnal, Ketesa and Cinny configs;
-- a ready-made nginx site.
+1. **init** generates every secret and config in `./data`: database password, Synapse secrets and signing key, Web Push keys, and the Sygnal and admin UI configs.
+2. **PostgreSQL**, **Synapse** and **Sygnal** start.
+3. **web** fills in your domains and push key.
+4. **Caddy** requests the HTTPS certificates.
 
-Running it again is safe: existing files are never overwritten.
+Follow the progress with `docker compose logs -f`.
 
-> [!CAUTION]
-> `server/data/` holds your secrets, your database and every uploaded file. **Back it up**, and never commit it.
-
-### 3. Start the server
-
-```bash
-docker compose -f server/compose.yml up -d
-docker compose -f server/compose.yml logs -f synapse   # wait for "Synapse now listening"
-```
-
-Add `--profile cinny` to also start Cinny.
-
-### 4. Build the web app
-
-```bash
-scripts/build-client.sh
-```
-
-This installs dependencies and builds with Vite inside Docker (Node isn't needed on the host). The result is published to `server/data/www`. The first build takes a few minutes.
-
-### 5. HTTPS and nginx
-
-Get a certificate for each domain, then install the generated site:
-
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot certonly --nginx -d chat.example.com
-sudo certbot certonly --nginx -d matrix.example.com
-
-sudo cp server/data/nginx/peyvand.conf /etc/nginx/conf.d/peyvand.conf
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-<details>
-<summary>Behind a CDN (Cloudflare, ArvanCloud, …)?</summary>
-
-1. Point the certificate paths in `peyvand.conf` at your CDN's origin certificate.
-2. Set the CDN's SSL mode to *Full*.
-3. Make sure the CDN doesn't cache `/_matrix/*` or `/_synapse/*`.
-
-</details>
-
-### 6. Create the first admin
+### 3. Create the first admin
 
 ```bash
 scripts/create-admin.sh alice
 ```
 
-Open `https://APP_DOMAIN` and sign in.
+Open `https://APP_DOMAIN` and sign in. That's it. 🎉
 
-- As an admin, you'll find **Settings → Server Admin**, where you can create users and invite codes.
-- New users sign up with an invite code. Registration is invite-only by default.
+- As an admin you get **Settings → Server Admin**, where you can manage users and create **invite codes**.
+- Sign-up is invite-only by default.
 
-### 7. Check federation (optional)
+> [!CAUTION]
+> `./data` holds your secrets, your database, every uploaded file and the certificates. **Back it up**, and never commit it.
+
+<details>
+<summary><b>Optional: check federation</b></summary>
 
 Open `https://federationtester.matrix.org/#MATRIX_DOMAIN`. Every check should be green.
+</details>
+
+<details>
+<summary><b>Behind a CDN (Cloudflare, ArvanCloud, …) or another reverse proxy</b></summary>
+
+Caddy needs to answer Let's Encrypt on port 80. You have two options:
+
+- Turn the CDN proxy off for the two records during the first start.
+- Run without Caddy and let your own proxy handle TLS.
+
+To run without Caddy:
+
+1. Start everything except Caddy: `docker compose up -d --scale caddy=0`
+2. Publish the internal ports to localhost. Create `compose.override.yml`:
+
+   ```yaml
+   services:
+     web:     { ports: ["127.0.0.1:18085:80"] }
+     synapse: { ports: ["127.0.0.1:18008:8008"] }
+     sygnal:  { ports: ["127.0.0.1:18083:5000"] }
+     ketesa:  { ports: ["127.0.0.1:18082:8080"] }
+   ```
+
+3. Route your proxy the same way as `server/caddy/Caddyfile`:
+   - `APP_DOMAIN` → web
+   - `/_matrix`, `/_synapse/client` and `/_synapse/admin` → synapse
+   - `/_matrix/push/v1/notify` → sygnal
+   - `/admin/` → ketesa
+   - the two `.well-known/matrix` responses
+
+With a CDN in front, set its SSL mode to *Full* and don't cache `/_matrix/*` or `/_synapse/*`.
+</details>
 
 ## ⚙️ Configuration
 
 ### `.env`
 
-| Variable | Description |
-|---|---|
-| `APP_DOMAIN` | Domain of the web app |
-| `MATRIX_DOMAIN` | Domain of the homeserver. Also the server name in user IDs |
-| `CINNY_DOMAIN` | Optional domain for Cinny |
-| `ADMIN_EMAIL` | Contact address sent to browser push services |
-| `APP_TITLE` | App name in the browser tab and when installed (default `Peyvand`) |
-| `PUSH_APP_ID` | Web Push app ID shared by the client and Sygnal |
+| Variable | Default | Description |
+|---|---|---|
+| `APP_DOMAIN` | | **Required.** Domain of the web app |
+| `MATRIX_DOMAIN` | | **Required.** Domain of the homeserver and the server name in user IDs |
+| `ADMIN_EMAIL` | | **Required.** Let's Encrypt account and Web Push contact |
+| `APP_TITLE` | `Peyvand` | App name in the browser tab and when installed. Rebuild after changing: `docker compose build web` |
+| `PUSH_APP_ID` | `com.example.peyvand.web` | Web Push app ID. Set it before the first start |
+| `CINNY_DOMAIN` | | Domain for the optional Cinny client |
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Ports Caddy listens on |
+| `CADDY_GLOBAL_OPTIONS` | | Extra Caddy options, e.g. `local_certs` for a local test without public DNS |
 
-`scripts/build-client.sh` turns these into the client's build variables:
+The app image is built once and doesn't depend on your domain. Its container fills in the domains and the push key every time it starts, so after changing a domain run:
 
-| Build variable | Comes from |
-|---|---|
-| `MATRIX_HOMESERVER` | `MATRIX_DOMAIN` |
-| `BASE_URL` | `APP_DOMAIN` |
-| `VAPID_PUBLIC_KEY` | `server/data/sygnal/vapid_public.txt` |
-| `PUSH_APP_ID` | `PUSH_APP_ID` |
-| `APP_TITLE` | `APP_TITLE` |
-
-After changing `.env`, run the build again.
+```bash
+docker compose up -d
+```
 
 ### Synapse
 
-Edit `server/data/synapse/homeserver.yaml`, then run:
+Edit `data/synapse/homeserver.yaml`, then restart Synapse:
 
 ```bash
-docker compose -f server/compose.yml restart synapse
+docker compose restart synapse
 ```
 
-Common changes:
+The init service never overwrites a file that already exists. Common changes:
 
-- **Open registration:** set `registration_requires_token: false`. Use this only with a captcha or email verification.
-- **Upload limit:** `max_upload_size` (also change `client_max_body_size` in nginx).
+- **Open registration:** `registration_requires_token: false`. Use this only together with a captcha or email verification.
+- **Upload limit:** `max_upload_size`. Also change `max_size` in `server/caddy/Caddyfile`.
 - **Email** (password resets, notifications): see the [Synapse docs](https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html#email).
 
 ### Invites
@@ -256,8 +234,16 @@ You can create invite codes in three ways:
 - from the shell:
 
 ```bash
-ADMIN_TOKEN=<admin access token> scripts/new-invite.sh 5 30   # 5 uses, valid for 30 days
+scripts/new-invite.sh alice 5 30   # as admin "alice": 5 uses, valid for 30 days
 ```
+
+### Optional Cinny client
+
+[Cinny](https://cinny.in) is a second Matrix web client for the same accounts. To enable it:
+
+1. Set `CINNY_DOMAIN` in `.env`.
+2. Rename `server/caddy/sites/cinny.caddy.example` to `cinny.caddy`.
+3. Run `docker compose --profile cinny up -d`.
 
 ### Last-seen privacy module
 
@@ -265,8 +251,8 @@ ADMIN_TOKEN=<admin access token> scripts/new-invite.sh 5 30   # 5 uses, valid fo
 
 The module:
 
-- records activity from the app's heartbeat and from Synapse's own request log;
-- applies each user's rules (stored in their account data) on the server;
+- records activity from the app's heartbeat and from Synapse's request log;
+- applies each user's rules on the server;
 - serves approximate times (*recently*, *within a week*, *within a month*) to people who aren't allowed to see the exact time.
 
 Server admins always see exact times.
@@ -274,18 +260,39 @@ Server admins always see exact times.
 > [!NOTE]
 > Because built-in presence is off, other Matrix apps (Element, Cinny) don't show online status.
 
-## 🔄 Updating
+## 📂 Repository layout
+
+```
+tele-matrix/
+├── compose.yml                # The whole stack
+├── .env.example               # The only file you edit
+├── client/                    # Web app: Telegram Web A + the Matrix layer
+│   ├── Dockerfile             # Build → nginx image, domains filled in at start
+│   └── src/api/matrix/        # ← the Matrix implementation of the client API
+├── server/
+│   ├── init/init.py           # First-start generator for configs, secrets and keys
+│   ├── templates/             # Synapse, Sygnal, Ketesa and Cinny config templates
+│   ├── synapse/modules/       # peyvand_last_seen.py: last-seen privacy module
+│   └── caddy/                 # Caddyfile (HTTPS + routing) and optional sites
+├── scripts/                   # create-admin.sh, new-invite.sh
+├── tests/e2e/                 # Playwright end-to-end scripts
+├── brand/                     # Logo and icon generator
+└── data/                      # ← created on first start: secrets, database, media (git-ignored)
+```
+
+## 🔄 Updating and backups
+
+**Updating:**
 
 ```bash
 git pull
-docker compose -f server/compose.yml pull
-docker compose -f server/compose.yml up -d
-scripts/build-client.sh
+docker compose pull
+docker compose up -d --build
 ```
 
-Existing configs in `server/data/` are left as they are. Compare them with `server/templates/` when a release notes a config change.
+Your files in `data/` are kept as they are. When a release mentions a config change, compare them with `server/templates/`.
 
-**Backups:** stop the stack, then archive `server/data/`. It holds the database, media, signing key and secrets. You can also run `pg_dump` from the `postgres` container while the stack is running.
+**Backups:** run `docker compose stop`, archive `data/`, then run `docker compose start`. The `data/` folder holds the database, media, signing key, secrets and certificates.
 
 ## 🛠 Development
 
@@ -295,7 +302,7 @@ npm ci
 MATRIX_HOMESERVER=https://matrix.example.com npm run dev   # http://localhost:1234
 ```
 
-The homeserver must allow CORS from your dev origin. Synapse allows all origins by default.
+Synapse allows requests from any origin by default, so the dev server can talk to your homeserver.
 
 | Command | |
 |---|---|
@@ -337,15 +344,15 @@ The homeserver must allow CORS from your dev origin. Synapse allows all origins 
 
 `tests/e2e/` holds Playwright scripts that drive a real deployment.
 
-1. Build the runner image. The scripts use Playwright from `client/node_modules`, so run `scripts/build-client.sh` once first:
+1. Run `npm ci` in `client/`. The scripts use Playwright from `client/node_modules`.
+2. Build the runner image:
 
    ```bash
    docker build -t peyvand-test tests/e2e
    ```
 
-2. Create a few test accounts on your server.
-3. Write them to `tests/e2e/creds.txt`, one `username password` per line. This file is git-ignored.
-4. Run a script against your deployment:
+3. Write test accounts to `tests/e2e/creds.txt`, one `username password` per line. This file is git-ignored.
+4. Run a script:
 
    ```bash
    docker run --rm --network host -e MOBILE=1 -e APP_URL=https://chat.example.com/ \
@@ -355,6 +362,18 @@ The homeserver must allow CORS from your dev origin. Synapse allows all origins 
 Screenshots are saved to `tests/e2e/out/`.
 
 ## 🩺 Troubleshooting
+
+<details>
+<summary><b>No HTTPS certificate / browser shows a certificate error</b></summary>
+
+Run `docker compose logs caddy`, then check:
+
+- both DNS records point to this server;
+- ports 80 and 443 are open in the firewall;
+- no CDN proxy sits in front during the first start.
+
+Caddy retries on its own once the problem is fixed.
+</details>
 
 <details>
 <summary><b>The app still shows the old version after an update</b></summary>
@@ -371,34 +390,21 @@ Open **Settings → Encryption** and enter your recovery key. Set one up on your
 <details>
 <summary><b>No push notifications</b></summary>
 
-Check these, in order:
-
-1. The client was built after `setup.sh` created the VAPID key. `scripts/build-client.sh` prints a warning if not.
-2. `PUSH_APP_ID` is the same in `.env` and `server/data/sygnal/sygnal.yaml`.
-3. `https://MATRIX_DOMAIN/_matrix/push/v1/notify` reaches Sygnal.
-4. The browser allowed notifications. On iOS, push works only for the app added to the Home Screen.
+1. `docker compose logs web` should not say "push notifications are off".
+2. `PUSH_APP_ID` must not have changed after the first start. It's written into `data/sygnal/sygnal.yaml`.
+3. The browser must have allowed notifications. On iOS, push works only for the app added to the Home Screen.
 </details>
 
 <details>
-<summary><b>Voice or video messages can't be seeked</b></summary>
+<summary><b>init fails with "set APP_DOMAIN in .env"</b></summary>
 
-Media is streamed through the service worker with HTTP range requests. If a CDN sits in front of `MATRIX_DOMAIN`, make sure it forwards the `Range` header and doesn't cache `/_matrix/client/v1/media/`.
-</details>
-
-<details>
-<summary><b>Synapse doesn't start: permission denied in /data</b></summary>
-
-Synapse runs as UID 991. Fix the ownership:
-
-```bash
-sudo chown -R 991:991 server/data/synapse
-```
+The domains in `.env` are still the `example.com` placeholders. Set real domains and run `docker compose up -d` again.
 </details>
 
 <details>
 <summary><b>Federation tester fails</b></summary>
 
-`https://MATRIX_DOMAIN/.well-known/matrix/server` must return `{"m.server":"MATRIX_DOMAIN:443"}`. Port 443 must also be reachable from the internet, not only through a CDN that blocks federation traffic.
+`https://MATRIX_DOMAIN/.well-known/matrix/server` must return `{"m.server":"MATRIX_DOMAIN:443"}`. Port 443 must also be reachable directly from the internet.
 </details>
 
 ## 🙏 Credits

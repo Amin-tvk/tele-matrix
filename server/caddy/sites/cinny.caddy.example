@@ -1,0 +1,7 @@
+# Optional Cinny client. To enable it:
+#   1. set CINNY_DOMAIN in .env and point its DNS to this server
+#   2. rename this file to cinny.caddy
+#   3. docker compose --profile cinny up -d && docker compose restart caddy
+{$CINNY_DOMAIN} {
+	reverse_proxy cinny:80
+}

@@ -1,0 +1,56 @@
+# Public entry point. Caddy gets and renews HTTPS certificates for both domains automatically.
+{
+	email {$ADMIN_EMAIL}
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+# The Peyvand web app
+{$APP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:80
+}
+
+# The homeserver: client and federation API, push gateway, admin UI
+{$MATRIX_DOMAIN} {
+	request_body {
+		max_size 100MB
+	}
+
+	handle /.well-known/matrix/server {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin *
+		respond `{"m.server":"{$MATRIX_DOMAIN}:443"}`
+	}
+
+	handle /.well-known/matrix/client {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin *
+		respond `{"m.homeserver":{"base_url":"https://{$MATRIX_DOMAIN}"}}`
+	}
+
+	handle /_matrix/push/v1/notify {
+		reverse_proxy sygnal:5000
+	}
+
+	handle /admin {
+		redir * /admin/ 301
+	}
+
+	handle /admin/* {
+		reverse_proxy ketesa:8080
+	}
+
+	@synapse path /_matrix/* /_synapse/client/* /_synapse/admin/*
+	handle @synapse {
+		reverse_proxy synapse:8008 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		redir https://{$APP_DOMAIN}/ 302
+	}
+}
+
+# Extra sites, such as the optional Cinny client (see sites/cinny.caddy.example)
+import sites/*.caddy

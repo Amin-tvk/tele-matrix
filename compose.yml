@@ -1,0 +1,138 @@
+# Peyvand: the whole stack in one file.
+#   cp .env.example .env   # set your domains
+#   docker compose up -d
+# The init service creates configs and secrets in ./data on the first start; back that folder up.
+name: peyvand
+
+x-settings: &settings
+  APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
+  MATRIX_DOMAIN: ${MATRIX_DOMAIN:?Set MATRIX_DOMAIN in .env}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+  PUSH_APP_ID: ${PUSH_APP_ID:-com.example.peyvand.web}
+
+services:
+  # One-off: generates configs, secrets and keys, then exits
+  init:
+    image: matrixdotorg/synapse:v1.163.2
+    entrypoint: ["python", "/init/init.py"]
+    user: root
+    environment: *settings
+    volumes:
+      - ./data:/data
+      - ./server/init:/init:ro
+      - ./server/templates:/templates:ro
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_DB: synapse
+      POSTGRES_PASSWORD_FILE: /run/peyvand/postgres_password
+      POSTGRES_INITDB_ARGS: --encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./data/secrets:/run/peyvand:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  synapse:
+    image: matrixdotorg/synapse:v1.163.2
+    restart: unless-stopped
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      # Loads the last-seen privacy module
+      PYTHONPATH: /modules
+    volumes:
+      - ./data/synapse:/data
+      - ./server/synapse/modules:/modules:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    networks: [backend, frontend]
+
+  # Web Push gateway for notifications
+  sygnal:
+    image: matrixdotorg/sygnal:v0.17.0
+    restart: unless-stopped
+    environment:
+      SYGNAL_CONF: /data/sygnal.yaml
+    volumes:
+      - ./data/sygnal:/data:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks: [frontend]
+
+  # The Peyvand web app, built from ./client
+  web:
+    build:
+      context: ./client
+      args:
+        APP_TITLE: ${APP_TITLE:-Peyvand}
+    image: peyvand-web
+    restart: unless-stopped
+    environment: *settings
+    volumes:
+      - ./data/sygnal/vapid_public.txt:/peyvand/vapid_public.txt:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks: [frontend]
+
+  # Synapse admin UI at https://MATRIX_DOMAIN/admin/
+  ketesa:
+    image: ghcr.io/etkecc/ketesa:v1.5.1-subpath-admin
+    restart: unless-stopped
+    volumes:
+      - ./data/ketesa.json:/home/sws/public/admin/config.json:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks: [frontend]
+
+  # HTTPS entry point with automatic certificates
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    environment:
+      <<: *settings
+      CINNY_DOMAIN: ${CINNY_DOMAIN:-}
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./server/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./server/caddy/sites:/etc/caddy/sites:ro
+      - ./data/caddy:/data
+    depends_on: [web, synapse, sygnal, ketesa]
+    networks: [frontend]
+
+  # Optional second client. Enable with: docker compose --profile cinny up -d (see server/caddy/sites)
+  cinny:
+    image: ghcr.io/cinnyapp/cinny:v4.12.7
+    restart: unless-stopped
+    profiles: [cinny]
+    volumes:
+      - ./data/cinny.json:/usr/share/nginx/html/config.json:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks: [frontend]
+
+networks:
+  backend:
+    internal: true
+  frontend: {}
