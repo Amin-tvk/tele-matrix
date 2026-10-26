@@ -4499,6 +4499,10 @@
 "MatrixReadyNewKey" = "Create a new recovery key. Your old key and security phrase will stop working.";
 "PeyvandLastSeenDesc" = "Who can see when you were online";
 "PeyvandSwitchCamera" = "Switch camera";
+"PeyvandPublicGroupHelp" = "Anyone on any Matrix server can find this group and join it with the address {address}.";
+"PeyvandPublicChannelHelp" = "Anyone on any Matrix server can find this channel and join it with the address {address}.";
+"PeyvandPrivateGroupHelp" = "Only people you add or invite can join this group.";
+"PeyvandPrivateChannelHelp" = "Only people you add or invite can join this channel.";
 "PeyvandLastSeenHelp" = "People who can't see your Last Seen get an approximate time instead: recently, within a week or within a month. "My Contacts" are the people you have a private chat with. Server admins can always see your Last Seen.";
 "MatrixAdminTitle" = "Server Admin";
 "MatrixAdminSettingsDesc" = "Users, invites and account tools";

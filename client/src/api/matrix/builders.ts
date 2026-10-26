@@ -51,6 +51,10 @@ export type ChatContext = {
   resolvePeerId: (userId: string) => string;
 };
 
+export function getServerName(id: string) {
+  return id.slice(id.indexOf(':') + 1);
+}
+
 export function getLocalpart(userId: string) {
   return userId.replace(/^@/, '').split(':')[0];
 }
@@ -206,7 +210,10 @@ export function buildApiChatFromRoom(
     currentUserBannedRights: buildBannedRights(myLevel, room),
     isNotJoined: membership !== 'join' ? true : undefined,
     isForbidden: membership === 'leave' || membership === 'ban' ? true : undefined,
-    usernames: alias ? [{ username: alias, isActive: true }] : undefined,
+    // Room addresses on this server can be changed in the group type settings
+    usernames: alias
+      ? [{ username: alias, isActive: true, isEditable: alias.endsWith(`:${getServerName(myUserId)}`) || undefined }]
+      : undefined,
     hasUsername: alias ? true : undefined,
     areSignaturesShown: isChannel ? true : undefined,
     folderId: isArchived ? 1 : undefined,

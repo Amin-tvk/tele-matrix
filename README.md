@@ -52,7 +52,7 @@ You get Telegram's speed, animations and polish. Users sign up with an invite co
 | ⭐ **Premium for all** | Features Telegram reserves for Premium are unlocked for every user |
 | 🛡️ **Server Admin panel** | In-app panel for admins: users, passwords, deactivation, invite codes. Ketesa (Synapse Admin) is included too |
 | 🌍 **Languages** | English UI, with a bundled Persian (RTL) language pack and the Vazirmatn font |
-| 🔗 **Federation** | It's Matrix: talk to users on other Matrix servers |
+| 🔗 **Federation** | Chat with users on any Matrix server, join their groups by address, and give your groups a public `#name:server` address |
 
 ## 🏗 Architecture
 
@@ -259,6 +259,24 @@ Server admins always see exact times.
 
 > [!NOTE]
 > Because built-in presence is off, other Matrix apps (Element, Cinny) don't show online status.
+
+## 🔗 Federation: talking to other servers
+
+Peyvand is a full Matrix server, so its users can talk to users and groups on any other Matrix server (matrix.org, mozilla.org, your friend's server, …). Users on other servers can use any Matrix app.
+
+| To… | Do this in Peyvand |
+|---|---|
+| Message someone on another server | Search their full ID, e.g. `@ali:matrix.org`, and send a message |
+| Join a group on another server | Search its address, e.g. `#group:matrix.org`, or paste a `matrix.to` link. Then tap **Join Group** |
+| Let others join your group | **Group info → Edit → Group Type → Public**, then pick an address. The group gets the address `#name:MATRIX_DOMAIN` and is listed in your server's public directory |
+| Let others reach you | Share your ID: `@username:MATRIX_DOMAIN` |
+
+Invites from other servers are accepted automatically. Making a group private again removes its address and the directory listing.
+
+Federation works out of the box: `.well-known` delegates it to port 443 of `MATRIX_DOMAIN`. Check it at `https://federationtester.matrix.org/#MATRIX_DOMAIN`.
+
+> [!NOTE]
+> The servers have to be able to reach each other. If outgoing connections to some servers are slow or filtered, Peyvand stops waiting after a few seconds and shows what it has. Searching for a user on such a server still lets you start a chat.
 
 ## 📂 Repository layout
 

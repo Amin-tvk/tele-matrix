@@ -3,7 +3,6 @@ import {
 } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
-import { TME_LINK_PREFIX } from '../../config';
 import {
   isUsernameValid, MAX_USERNAME_LENGTH, MIN_UPDATE_USERNAME_LENGTH, USERNAME_REGEX,
 } from '../../util/entities/username';
@@ -25,9 +24,15 @@ type OwnProps = {
   onChange: (value: string) => void;
 };
 
-const LINK_PREFIX_REGEX = /https:\/\/t\.me\/?/i;
+// Public links of chats are Matrix room addresses: "#name", completed with this server's name
+const LINK_PREFIX = '#';
+const LINK_PREFIX_REGEX = /^#/;
 
 const runDebouncedForCheckUsername = debounce((cb) => cb(), 250, false);
+
+function getAddressLocalpart(address?: string) {
+  return (address || '').replace(/^#/, '').split(':')[0];
+}
 
 const UsernameInput = ({
   chatId,
@@ -78,7 +83,7 @@ const UsernameInput = ({
   }, [username, renderingIsUsernameAvailable, isChecking, lang, asLink, label]);
 
   useEffect(() => {
-    setUsername(currentUsername || '');
+    setUsername(asLink ? getAddressLocalpart(currentUsername) : (currentUsername || ''));
   }, [asLink, currentUsername]);
 
   const handleUsernameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,7 +106,7 @@ const UsernameInput = ({
     onChange?.(newUsername);
 
     runDebouncedForCheckUsername(() => {
-      if (newUsername === currentUsername) return;
+      if (newUsername === (asLink ? getAddressLocalpart(currentUsername) : currentUsername)) return;
 
       if (chatId) {
         checkPublicLink({ chatId, username: newUsername });
@@ -113,7 +118,7 @@ const UsernameInput = ({
 
   return (
     <InputText
-      value={`${asLink ? TME_LINK_PREFIX : ''}${username}`}
+      value={`${asLink ? LINK_PREFIX : ''}${username}`}
       onChange={handleUsernameChange}
       label={isChecking ? lang('Checking') : label}
       error={usernameError}

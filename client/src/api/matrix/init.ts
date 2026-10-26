@@ -7,6 +7,7 @@ import * as auth from './auth';
 import {
   getClient, hasClient, onUpdate, retryConnectionNow, startClient, stopClient,
 } from './client';
+import * as directory from './directory';
 import * as encryption from './encryption';
 import * as folders from './folders';
 import * as lastSeen from './lastSeen';
@@ -43,6 +44,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...admin,
   ...auth,
   ...encryption,
+  ...directory,
   ...folders,
   ...lastSeen,
   destroy,

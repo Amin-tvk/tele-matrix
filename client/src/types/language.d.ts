@@ -3379,6 +3379,8 @@ export interface LangPair {
   'MatrixReadyNewKey': undefined;
   'PeyvandLastSeenDesc': undefined;
   'PeyvandSwitchCamera': undefined;
+  'PeyvandPrivateGroupHelp': undefined;
+  'PeyvandPrivateChannelHelp': undefined;
   'PeyvandLastSeenHelp': undefined;
   'MatrixAdminTitle': undefined;
   'MatrixAdminSettingsDesc': undefined;
@@ -3478,6 +3480,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'SetUrlAvailable': {
     'url': V;
+  };
+  'PeyvandPublicGroupHelp': {
+    'address': V;
+  };
+  'PeyvandPublicChannelHelp': {
+    'address': V;
   };
   'UsernameAvailable': {
     'username': V;

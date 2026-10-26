@@ -6,7 +6,9 @@ import { getActions, getGlobal, withGlobal } from '../../../global';
 import type { ApiChat, ApiUser } from '../../../api/types';
 import { ManagementProgress } from '../../../types';
 
-import { PURCHASE_USERNAME, TME_LINK_PREFIX, USERNAME_PURCHASE_ERROR } from '../../../config';
+import {
+  IS_TELEGRAM_SERVICES_ENABLED, MATRIX_SERVER_NAME, PURCHASE_USERNAME, TME_LINK_PREFIX, USERNAME_PURCHASE_ERROR,
+} from '../../../config';
 import { getMainUsername, isChatChannel, isChatPublic } from '../../../global/helpers';
 import {
   selectChat, selectChatFullInfo,
@@ -89,6 +91,8 @@ const ManageChatPrivacyType = ({
 
   const firstEditableUsername = useMemo(() => chat.usernames?.find(({ isEditable }) => isEditable), [chat.usernames]);
   const currentUsername = firstEditableUsername?.username || '';
+  // Room addresses are stored in full (#name:server); the field edits only the name
+  const currentLocalpart = currentUsername.replace(/^#/, '').split(':')[0];
   const isPublic = useMemo(() => isChatPublic(chat), [chat]);
 
   const [isProfileFieldsTouched, setIsProfileFieldsTouched] = useState(false);
@@ -124,13 +128,13 @@ const ManageChatPrivacyType = ({
   }, [isJoinRequest]);
 
   useEffect(() => {
-    if (!areInvitesLoaded) {
+    if (IS_TELEGRAM_SERVICES_ENABLED && !areInvitesLoaded) {
       loadExportedChatInvites({ chatId: chat.id });
     }
   }, [chat.id, areInvitesLoaded]);
 
   useEffect(() => {
-    if (privacyType && !privateInviteLink) {
+    if (IS_TELEGRAM_SERVICES_ENABLED && privacyType && !privateInviteLink) {
       updatePrivateLink();
     }
   }, [privacyType, privateInviteLink, updatePrivateLink]);
@@ -243,7 +247,8 @@ const ManageChatPrivacyType = ({
   }];
 
   const isLoading = progress === ManagementProgress.InProgress;
-  const shouldRenderUsernamesManage = privacyType === 'public' && chat.usernames && chat.usernames.length > 0;
+  const shouldRenderUsernamesManage = IS_TELEGRAM_SERVICES_ENABLED
+    && privacyType === 'public' && chat.usernames && chat.usernames.length > 0;
 
   function renderPurchaseLink() {
     const purchaseInfoLink = `${TME_LINK_PREFIX}${PURCHASE_USERNAME}`;
@@ -269,7 +274,12 @@ const ManageChatPrivacyType = ({
             onChange={handleOptionChange}
           />
         </Island>
-        {privacyType === 'private' ? (
+        {privacyType === 'private' && !IS_TELEGRAM_SERVICES_ENABLED && (
+          <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
+            {lang(isChannel ? 'PeyvandPrivateChannelHelp' : 'PeyvandPrivateGroupHelp')}
+          </IslandDescription>
+        )}
+        {privacyType === 'private' ? IS_TELEGRAM_SERVICES_ENABLED && (
           <>
             <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
               {lang('InviteLink')}
@@ -315,7 +325,11 @@ const ManageChatPrivacyType = ({
             </Island>
             {error === USERNAME_PURCHASE_ERROR && renderPurchaseLink()}
             <IslandDescription dir="auto">
-              {lang(isChannel ? 'ChannelUsernameCreatePublicLinkHelp' : 'GroupUsernameCreatePublicLinkHelp')}
+              {IS_TELEGRAM_SERVICES_ENABLED
+                ? lang(isChannel ? 'ChannelUsernameCreatePublicLinkHelp' : 'GroupUsernameCreatePublicLinkHelp')
+                : lang(isChannel ? 'PeyvandPublicChannelHelp' : 'PeyvandPublicGroupHelp', {
+                  address: `#${editableUsername ?? currentLocalpart}:${MATRIX_SERVER_NAME}`,
+                })}
             </IslandDescription>
           </>
         )}
@@ -326,7 +340,7 @@ const ManageChatPrivacyType = ({
             onEditUsername={handleUsernameChange}
           />
         )}
-        {!(isChannel && isPublic) && (
+        {IS_TELEGRAM_SERVICES_ENABLED && !(isChannel && isPublic) && (
           <>
             <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
               {lang('MemberRequests')}
@@ -349,22 +363,26 @@ const ManageChatPrivacyType = ({
             </IslandDescription>
           </>
         )}
-        <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang(isChannel ? 'ChannelVisibilityForwardingChannelTitle' : 'ChannelVisibilityForwardingGroupTitle')}
-        </IslandTitle>
-        <Island dir={lang.isRtl ? 'rtl' : undefined}>
-          <RadioGroup
-            selected={isProtected ? 'protected' : 'allowed'}
-            name="forwarding-type"
-            options={forwardingOptions}
-            onChange={handleForwardingOptionChange}
-          />
-        </Island>
-        <IslandDescription>
-          {isChannel
-            ? lang('ChannelVisibilityForwardingChannelInfo')
-            : lang('ChannelVisibilityForwardingGroupInfo')}
-        </IslandDescription>
+        {IS_TELEGRAM_SERVICES_ENABLED && (
+          <>
+            <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
+              {lang(isChannel ? 'ChannelVisibilityForwardingChannelTitle' : 'ChannelVisibilityForwardingGroupTitle')}
+            </IslandTitle>
+            <Island dir={lang.isRtl ? 'rtl' : undefined}>
+              <RadioGroup
+                selected={isProtected ? 'protected' : 'allowed'}
+                name="forwarding-type"
+                options={forwardingOptions}
+                onChange={handleForwardingOptionChange}
+              />
+            </Island>
+            <IslandDescription>
+              {isChannel
+                ? lang('ChannelVisibilityForwardingChannelInfo')
+                : lang('ChannelVisibilityForwardingGroupInfo')}
+            </IslandDescription>
+          </>
+        )}
       </div>
       <FloatingActionButton
         isShown={canUpdate}

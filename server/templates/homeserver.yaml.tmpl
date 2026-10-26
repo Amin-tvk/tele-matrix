@@ -71,6 +71,10 @@ experimental_features:
   msc4222_enabled: true
 max_event_delay_duration: 24h
 
+# Group owners can list their public groups in the room directory, so people on any server can find them
+room_list_publication_rules:
+  - action: allow
+
 user_directory:
   enabled: true
   search_all_users: true

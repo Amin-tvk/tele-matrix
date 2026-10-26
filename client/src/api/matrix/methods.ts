@@ -102,6 +102,7 @@ import {
   getUserIdByPeerId,
   isUserPeerId,
 } from './ids';
+import { findRoomByAddress, searchPublicRooms, withTimeout } from './directory';
 import { uploadContent, uploadFile } from './media';
 import { buildTodoContent, buildTodoUpdateContent, TODO_UPDATE_EVENT } from './todo';
 
@@ -112,6 +113,10 @@ const TYPING_TIMEOUT_MS = 6000;
 const WAVEFORM_MAX_TELEGRAM = 31;
 const WAVEFORM_MAX_MATRIX = 1024;
 const USER_DIRECTORY_LIMIT = 20;
+
+function getServerFromUserId(userId: string) {
+  return userId.slice(userId.indexOf(':') + 1);
+}
 const TEXT_DEFAULT_EMOJI_START = 0x2000;
 const TEXT_DEFAULT_EMOJI_END = 0x2BFF;
 
@@ -136,7 +141,7 @@ function getUserIdForPeer(peer: Pick<ApiPeer, 'id'>) {
   return getUserIdByPeerId(peer.id);
 }
 
-function waitForRoom(roomId: string) {
+export function waitForRoom(roomId: string) {
   const client = getClient();
   return new Promise<Room | undefined>((resolve) => {
     const startedAt = Date.now();
@@ -543,6 +548,14 @@ export async function searchChats({ query }: { query: string }) {
   const chats: ApiChat[] = [];
   const userIds = new Set<string>();
 
+  // A group or channel address on any server (#name:server), or public groups of this server by name
+  const addressedChat = await findRoomByAddress(query).catch(() => undefined);
+  const publicChats = addressedChat ? [addressedChat] : await searchPublicRooms(query.trim()).catch(() => []);
+  publicChats.forEach((chat) => {
+    chats.push(chat);
+    globalResultIds.push(chat.id);
+  });
+
   getVisibleRooms().forEach((room) => {
     const chat = buildChat(room);
     if (chat.title.toLowerCase().includes(lowerQuery)) {
@@ -575,12 +588,18 @@ export async function searchChats({ query }: { query: string }) {
     const exactPeerId = getPeerIdByUserId(exactUserId);
     if (!userIds.has(exactUserId) && exactUserId !== getMyUserId()) {
       try {
-        const profile = await client.getProfileInfo(exactUserId);
+        const profile = await withTimeout(client.getProfileInfo(exactUserId));
         rememberProfile(exactUserId, profile.displayname, profile.avatar_url);
         userIds.add(exactUserId);
         globalResultIds.unshift(exactPeerId);
-      } catch {
-        // No such user
+      } catch (err) {
+        // Other servers (matrix.org among them) hide profiles from people who share no room with the user,
+        // so only a definite "not found" means the user doesn't exist
+        const isRemote = getServerFromUserId(exactUserId) !== client.getDomain();
+        if (isRemote && (err as { errcode?: string }).errcode !== 'M_NOT_FOUND') {
+          userIds.add(exactUserId);
+          globalResultIds.unshift(exactPeerId);
+        }
       }
     }
   }
@@ -600,10 +619,22 @@ export async function searchChats({ query }: { query: string }) {
 export async function getChatByUsername(username: string) {
   await waitForSync();
   const client = getClient();
+
+  // Links carry either a full address or the local part of one on this server
+  const address = username.startsWith('#') || username.startsWith('!') || username.includes('matrix.to')
+    ? username : undefined;
+  const addressedChat = address ? await findRoomByAddress(address).catch(() => undefined) : undefined;
+  if (addressedChat) return { chat: addressedChat, user: undefined };
+
   const cleaned = username.replace(/^@/, '');
   const userId = cleaned.includes(':') ? `@${cleaned}` : `@${cleaned}:${client.getDomain()}`;
   try {
-    const profile = await client.getProfileInfo(userId);
+    type Profile = { displayname?: string; avatar_url?: string };
+    const profile = await withTimeout(client.getProfileInfo(userId)).catch((err: { errcode?: string }): Profile => {
+      // Profiles on other servers may be hidden; the user can still be messaged
+      if (getServerFromUserId(userId) !== client.getDomain() && err.errcode !== 'M_NOT_FOUND') return {};
+      throw err;
+    });
     rememberProfile(userId, profile.displayname, profile.avatar_url);
     const user = buildUser(userId);
     onUpdate({ '@type': 'updateUser', id: user.id, user });

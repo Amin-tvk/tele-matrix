@@ -26,6 +26,14 @@ export const PAID_MESSAGES_PURPOSE = 'paid_messages';
 export const DEBUG = APP_ENV !== 'production';
 // Telegram-only services (Premium, Stars, stories, bots, support chat...) have no Matrix counterpart
 export const IS_TELEGRAM_SERVICES_ENABLED = false;
+// Server name of the Matrix homeserver, used in user IDs and room addresses (#name:server)
+export const MATRIX_SERVER_NAME = (() => {
+  try {
+    return new URL(import.meta.env.TG_APP_MATRIX_HOMESERVER).host;
+  } catch {
+    return '';
+  }
+})();
 // Web Push key of the Matrix push gateway (Sygnal) that delivers notifications while the app is closed
 export const PUSH_VAPID_PUBLIC_KEY = import.meta.env.TG_APP_VAPID_PUBLIC_KEY || '';
 export const DEBUG_MORE = false;
