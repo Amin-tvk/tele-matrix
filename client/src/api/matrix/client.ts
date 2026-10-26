@@ -26,6 +26,7 @@ import { MAIN_THREAD_ID } from '../types/messages';
 
 import { DEBUG } from '../../config';
 import Deferred from '../../util/Deferred';
+import { pause } from '../../util/schedulers';
 import { sendApiUpdate } from '../gramjs/updates/apiUpdateEmitter';
 import {
   buildApiChatFromRoom,
@@ -49,7 +50,9 @@ import {
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
 import { fetchWithDeadline } from './network';
 import { buildSessionData, setSession } from './session';
-import { clearStore, loadStore, setStoreName } from './store';
+import {
+  clearStore, getValue, loadStore, setStoreName, setValue,
+} from './store';
 import { TODO_UPDATE_EVENT } from './todo';
 
 let client: MatrixClient | undefined;
@@ -142,7 +145,7 @@ export async function startClient(session: MatrixSession, isFreshLogin?: boolean
     store.startup().catch((err) => {
       if (DEBUG) console.warn('[matrix] IndexedDB store startup failed', err);
     }),
-    initCrypto(client, session),
+    initCrypto(client, session, isFreshLogin),
   ]);
 
   subscribeToClient(client);
@@ -161,39 +164,49 @@ export async function startClient(session: MatrixSession, isFreshLogin?: boolean
   if (isFreshLogin && DEBUG) console.log('[matrix] Started client after login');
 }
 
-function getCryptoDatabasePrefix(userId: string) {
+// Each device keeps its own crypto store. Accounts signed in before that use one store per user
+const CRYPTO_PREFIX_KEY = 'crypto-prefix';
+const CRYPTO_INIT_ATTEMPTS = 3;
+const CRYPTO_RETRY_DELAY_MS = 1000;
+const STORE_ACCOUNT_MISMATCH_RE = /account in the store doesn.t match/i;
+
+function getCryptoDatabasePrefix(userId: string, deviceId: string) {
+  return `peyvand-crypto:${userId}:${deviceId}`;
+}
+
+function getLegacyCryptoDatabasePrefix(userId: string) {
   return `peyvand-crypto:${userId}`;
 }
 
-function deleteCryptoDatabases(prefix: string) {
-  return Promise.all(['matrix-sdk-crypto', 'matrix-sdk-crypto-meta'].map((name) => (
-    new Promise<void>((resolve) => {
-      const request = self.indexedDB.deleteDatabase(`${prefix}::${name}`);
-      request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
-      request.onblocked = () => resolve();
-    })
-  )));
+function getCurrentCryptoDatabasePrefix(userId: string) {
+  return getValue(CRYPTO_PREFIX_KEY) || getLegacyCryptoDatabasePrefix(userId);
 }
 
-async function initCrypto(currentClient: MatrixClient, session: MatrixSession) {
-  const prefix = getCryptoDatabasePrefix(session.userId);
-  try {
-    await currentClient.initRustCrypto({ cryptoDatabasePrefix: prefix });
-    return;
-  } catch (err) {
-    if (DEBUG) console.warn('[matrix] Failed to initialize crypto, resetting the local crypto store', err);
-  }
+// The crypto store holds this device's identity and every message key it received. It is never deleted
+// because opening it failed: a new identity under the same device ID can't be published (the server keeps
+// the old keys), so no one could send this device message keys anymore
+async function initCrypto(currentClient: MatrixClient, session: MatrixSession, isFreshLogin?: boolean) {
+  const ownPrefix = getCryptoDatabasePrefix(session.userId, session.deviceId);
+  let prefix = getValue(CRYPTO_PREFIX_KEY)
+    || (isFreshLogin ? ownPrefix : getLegacyCryptoDatabasePrefix(session.userId));
 
-  // A store left from an earlier login on this browser belongs to another device and cannot be opened.
-  // Its keys are useless for the new device, so it is replaced; old messages come back through key backup
-  await deleteCryptoDatabases(prefix);
-  try {
-    await currentClient.initRustCrypto({ cryptoDatabasePrefix: prefix });
-  } catch (err) {
-    // Encrypted rooms stay unreadable without crypto, everything else keeps working
-    if (DEBUG) console.warn('[matrix] Failed to initialize crypto', err);
+  for (let attempt = 1; attempt <= CRYPTO_INIT_ATTEMPTS; attempt++) {
+    try {
+      await currentClient.initRustCrypto({ cryptoDatabasePrefix: prefix });
+      setValue(CRYPTO_PREFIX_KEY, prefix);
+      return;
+    } catch (err) {
+      // A store left from an earlier sign-in on this browser belongs to another device; this one gets its own
+      if (STORE_ACCOUNT_MISMATCH_RE.test(String(err)) && prefix !== ownPrefix) {
+        prefix = ownPrefix;
+        attempt--;
+        continue;
+      }
+      if (DEBUG) console.warn(`[matrix] Failed to initialize crypto (attempt ${attempt})`, err);
+      await pause(CRYPTO_RETRY_DELAY_MS * attempt);
+    }
   }
+  // Encrypted rooms stay unreadable until the next start, but the keys are kept for it
 }
 
 export async function stopClient(shouldClearData: boolean) {
@@ -206,7 +219,9 @@ export async function stopClient(shouldClearData: boolean) {
     currentClient.removeAllListeners();
     if (shouldClearData) {
       try {
-        await currentClient.clearStores({ cryptoDatabasePrefix: getCryptoDatabasePrefix(currentClient.getUserId()!) });
+        await currentClient.clearStores({
+          cryptoDatabasePrefix: getCurrentCryptoDatabasePrefix(currentClient.getUserId()!),
+        });
       } catch {
         // Ignore
       }

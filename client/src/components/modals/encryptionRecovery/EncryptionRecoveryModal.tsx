@@ -27,7 +27,7 @@ const RECOVERY_KEY_FILE_NAME = 'peyvand-recovery-key.txt';
 const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
   const {
     restoreEncryptionKeys, closeEncryptionRecoveryModal, setupEncryptionRecovery, setEncryptionRecoveryMode,
-    showNotification,
+    showNotification, signOut,
   } = getActions();
   const lang = useLang();
 
@@ -83,6 +83,11 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
     if (!recoveryKey) return;
     copyTextToClipboard(recoveryKey);
     showNotification({ message: { key: 'TextCopied' } });
+  });
+
+  const handleSignOut = useLastCallback(() => {
+    handleClose();
+    signOut({ forceInitApi: true });
   });
 
   const handleDownload = useLastCallback(() => {
@@ -180,6 +185,21 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
     );
   }
 
+  function renderBroken() {
+    return (
+      <>
+        <p className={styles.description}>{lang('MatrixDeviceBrokenDescription')}</p>
+        <p className={buildClassName(styles.description, styles.warning)}>{lang('MatrixDeviceBrokenWarning')}</p>
+        <div className="dialog-buttons">
+          <Button className="confirm-dialog-button" isText color="danger" onClick={handleSignOut}>
+            {lang('MatrixDeviceBrokenAction')}
+          </Button>
+          <Button className="confirm-dialog-button" isText onClick={handleClose}>{lang('Cancel')}</Button>
+        </div>
+      </>
+    );
+  }
+
   function renderRestore() {
     if (isRestoreDone) {
       return (
@@ -229,15 +249,17 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
     if (recoveryKey) return renderRecoveryKey();
     if (!mode) return <Loading className={styles.loading} />;
     if (mode === 'restore') return renderRestore();
+    if (mode === 'broken') return renderBroken();
     if (mode === 'ready' && !isLoading && !errorKey) return renderReady();
     return renderSetup();
   }
 
   const title = recoveryKey ? 'MatrixSetupKeyTitle'
-    : mode === 'setup' ? 'MatrixSetupTitle'
-      : mode === 'reset' ? 'MatrixResetTitle'
-        : mode === 'ready' ? 'MatrixEncryptionSettings'
-          : 'MatrixRecoveryTitle';
+    : mode === 'broken' ? 'MatrixDeviceBrokenTitle'
+      : mode === 'setup' ? 'MatrixSetupTitle'
+        : mode === 'reset' ? 'MatrixResetTitle'
+          : mode === 'ready' ? 'MatrixEncryptionSettings'
+            : 'MatrixRecoveryTitle';
 
   return (
     <Modal

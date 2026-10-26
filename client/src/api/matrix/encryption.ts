@@ -1,5 +1,5 @@
 import type { UIAuthCallback } from 'matrix-js-sdk';
-import { MatrixError } from 'matrix-js-sdk';
+import { MatrixError, Method } from 'matrix-js-sdk';
 import { deriveRecoveryKeyFromPassphrase } from 'matrix-js-sdk/lib/crypto-api/key-passphrase';
 import { decodeRecoveryKey } from 'matrix-js-sdk/lib/crypto-api/recovery-key';
 import type { SecretStorageKeyDescription } from 'matrix-js-sdk/lib/secret-storage';
@@ -18,6 +18,8 @@ export type EncryptionStatus = {
   isDeviceVerified: boolean;
   isBackupActive: boolean;
   isCrossSigningReady: boolean;
+  // This device's identity differs from the one the server publishes for it, so no one can send it keys
+  isDeviceBroken: boolean;
 };
 
 export type RecoverySetupResult = {
@@ -66,15 +68,19 @@ export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefi
       isDeviceVerified: false,
       isBackupActive: false,
       isCrossSigningReady: false,
+      isDeviceBroken: false,
     };
   }
 
-  const [defaultKeyId, backupInfo, verification, activeBackup, isCrossSigningReady] = await Promise.all([
+  const [
+    defaultKeyId, backupInfo, verification, activeBackup, isCrossSigningReady, isDeviceBroken,
+  ] = await Promise.all([
     client.secretStorage.getDefaultKeyId().catch(() => null),
     crypto.getKeyBackupInfo().catch(() => null),
     crypto.getDeviceVerificationStatus(getMyUserId(), client.getDeviceId()!).catch(() => null),
     crypto.getActiveSessionBackupVersion().catch(() => null),
     crypto.isCrossSigningReady().catch(() => false),
+    checkIsDeviceBroken(),
   ]);
 
   return {
@@ -84,7 +90,41 @@ export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefi
     isDeviceVerified: Boolean(verification?.crossSigningVerified),
     isBackupActive: Boolean(activeBackup),
     isCrossSigningReady,
+    isDeviceBroken,
   };
+}
+
+type KeysQueryResponse = {
+  device_keys?: Record<string, Record<string, { keys?: Record<string, string> }>>;
+};
+
+let deviceCheck: { deviceId: string; isBroken: boolean } | undefined;
+
+// A device whose local crypto store was lost and recreated keeps its device ID but gets new keys.
+// The server refuses to replace the published ones, so other people keep encrypting for the lost keys
+// and new messages never become readable here. Only signing in again (a new device) fixes it
+async function checkIsDeviceBroken() {
+  const client = getClient();
+  const deviceId = client.getDeviceId();
+  const crypto = client.getCrypto();
+  if (!deviceId || !crypto) return false;
+  if (deviceCheck?.deviceId === deviceId) return deviceCheck.isBroken;
+
+  try {
+    const [ownKeys, response] = await Promise.all([
+      crypto.getOwnDeviceKeys(),
+      client.http.authedRequest<KeysQueryResponse>(Method.Post, '/keys/query', undefined, {
+        device_keys: { [getMyUserId()]: [deviceId] },
+      }),
+    ]);
+    const publishedKey = response.device_keys?.[getMyUserId()]?.[deviceId]?.keys?.[`curve25519:${deviceId}`];
+    // Keys not published yet are uploaded by the SDK shortly
+    if (!publishedKey) return false;
+    deviceCheck = { deviceId, isBroken: publishedKey !== ownKeys.curve25519 };
+    return deviceCheck.isBroken;
+  } catch {
+    return false;
+  }
 }
 
 async function unlockSecretStorage(input: string) {

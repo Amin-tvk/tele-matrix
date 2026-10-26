@@ -161,7 +161,7 @@ export interface ActionPayloads {
   openEncryptionRecoveryModal: WithTabId | undefined;
   closeEncryptionRecoveryModal: WithTabId | undefined;
   restoreEncryptionKeys: { key: string } & WithTabId;
-  setEncryptionRecoveryMode: { mode: 'restore' | 'setup' | 'ready' | 'reset' } & WithTabId;
+  setEncryptionRecoveryMode: { mode: 'restore' | 'setup' | 'ready' | 'reset' | 'broken' } & WithTabId;
   setupEncryptionRecovery: { passphrase?: string; password?: string; isReset?: boolean } & WithTabId;
   matrixRegister: { username: string; password: string; token: string; displayName?: string };
   signUp: {

@@ -37,6 +37,19 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
   if (Date.now() - lastPromptAt < RECOVERY_PROMPT_DURATION) return;
   const status = await callApi('fetchEncryptionStatus');
   if (!status?.isAvailable) return;
+  // A recovery key can't help a device whose keys were lost; it needs a new sign-in instead
+  if (status.isDeviceBroken) {
+    lastPromptAt = Date.now();
+    actions.showNotification({
+      message: { key: 'MatrixDeviceBrokenPrompt' },
+      actionText: { key: 'MatrixDeviceBrokenAction' },
+      action: { action: 'openEncryptionRecoveryModal', payload: { tabId: getCurrentTabId() } },
+      duration: RECOVERY_PROMPT_DURATION,
+      icon: 'lock',
+      tabId: getCurrentTabId(),
+    });
+    return;
+  }
   const mode = getRecoveryMode(status);
   if (mode === 'ready') return;
   // Accounts with only an old key backup can still restore from it
@@ -66,8 +79,9 @@ addActionHandler('openEncryptionRecoveryModal', async (global, actions, payload)
   if (!selectTabState(global, tabId).encryptionRecoveryModal) return;
   // Accounts with an old key backup but no secret storage restore with the backup key
   const mode = !status?.isAvailable ? 'restore'
-    : !status.hasSecretStorage && status.hasKeyBackup && !status.isBackupActive ? 'restore'
-      : getRecoveryMode(status);
+    : status.isDeviceBroken ? 'broken'
+      : !status.hasSecretStorage && status.hasKeyBackup && !status.isBackupActive ? 'restore'
+        : getRecoveryMode(status);
   global = updateTabState(global, { encryptionRecoveryModal: { mode } }, tabId);
   setGlobal(global);
 });
