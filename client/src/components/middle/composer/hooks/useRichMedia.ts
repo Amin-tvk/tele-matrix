@@ -239,7 +239,7 @@ export default function useRichMedia({
         try {
           const isAudio = SUPPORTED_AUDIO_CONTENT_TYPES.has(file.type);
           const isDocument = !isAudio && (shouldSendAsFile || !RICH_MEDIA_CONTENT_TYPES.has(file.type));
-          attachment = isDocument ? {
+          const buildDocument = (): ApiAttachment => ({
             blob: file,
             blobUrl: URL.createObjectURL(file),
             filename: file.name,
@@ -247,10 +247,16 @@ export default function useRichMedia({
             size: file.size,
             uniqueId: `${Date.now()}-${Math.random()}`,
             shouldSendAsFile: true,
-          } : await buildAttachment(file.name, file, { shouldSendInHighQuality });
-          if (!isDocument && (attachment.shouldSendAsFile || !(isAudio ? attachment.audio : attachment.quick))) {
+          });
+          attachment = isDocument
+            ? buildDocument()
+            : await buildAttachment(file.name, file, { shouldSendInHighQuality }).catch(() => undefined);
+          if (!isDocument && (!attachment || attachment.shouldSendAsFile
+            || !(isAudio ? attachment.audio : attachment.quick))) {
             revokeAttachmentUrls(attachment);
-            return undefined;
+            // A photo or video the browser can't open (an unusual codec, say) still goes, as a file
+            if (!canSendDocuments || shouldAppend) return undefined;
+            attachment = buildDocument();
           }
 
           const uploadingMedia = buildUploadingMedia(attachment);
