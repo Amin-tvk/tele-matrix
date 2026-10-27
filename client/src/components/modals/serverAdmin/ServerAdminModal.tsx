@@ -4,7 +4,7 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { AdminInvite, AdminUser } from '../../../api/matrix/admin';
+import type { AdminChannel, AdminInvite, AdminUser } from '../../../api/matrix/admin';
 import type { ApiUser } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 
@@ -17,6 +17,7 @@ import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
 import Avatar from '../../common/Avatar';
+import VerifiedIcon from '../../common/VerifiedIcon';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import InputText from '../../ui/InputText';
@@ -63,6 +64,8 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
   const [totalUsers, setTotalUsers] = useState<number | undefined>();
   const [roomsCount, setRoomsCount] = useState<number | undefined>();
   const [invites, setInvites] = useState<AdminInvite[] | undefined>();
+  const [channels, setChannels] = useState<AdminChannel[] | undefined>();
+  const [channelQuery, setChannelQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
   const [isBusy, setIsBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>();
@@ -104,6 +107,40 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
     void loadUsers(value);
   }, [], SEARCH_DEBOUNCE_MS, true);
 
+  const loadChannels = useLastCallback(async (searchQuery = channelQuery) => {
+    const result = await tryApi(callApi('fetchAdminChannels', { query: searchQuery }));
+    if (!result) {
+      notify(lang('MatrixAdminError'));
+      setChannels([]);
+      return;
+    }
+    setChannels(result);
+  });
+
+  const searchChannelsDebounced = useDebouncedCallback((value: string) => {
+    void loadChannels(value);
+  }, [], SEARCH_DEBOUNCE_MS, true);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 1 && !channels) void loadChannels('');
+  }, [isOpen, activeTab, channels]);
+
+  const handleToggleChannelVerified = useLastCallback(async (channel: AdminChannel) => {
+    setIsBusy(true);
+    const result = await tryApi(callApi('setPeerVerified', {
+      matrixId: channel.roomId, isVerified: !channel.isVerified,
+    }));
+    setIsBusy(false);
+    if (!result) {
+      notify(lang('MatrixAdminError'));
+      return;
+    }
+    notify(lang(channel.isVerified ? 'PeyvandVerifiedRemoved' : 'PeyvandVerifiedGiven'));
+    setChannels(channels?.map((current) => (
+      current.roomId === channel.roomId ? { ...current, isVerified: !channel.isVerified } : current
+    )));
+  });
+
   useEffect(() => {
     if (!isOpen) return;
     void loadUsers('');
@@ -120,6 +157,8 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
     setSelectedUserId(undefined);
     setQuery('');
     setActiveTab(0);
+    setChannels(undefined);
+    setChannelQuery('');
     setIsCreateFormOpen(false);
     resetUserForms();
   });
@@ -162,6 +201,14 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
     void runAction(
       () => tryApi(callApi('setUserServerAdmin', { userId: selectedUser.userId, isAdmin: !selectedUser.isAdmin })),
       lang('MatrixAdminSaved'),
+    );
+  });
+
+  const handleToggleVerified = useLastCallback(() => {
+    if (!selectedUser) return;
+    void runAction(
+      () => tryApi(callApi('setPeerVerified', { matrixId: selectedUser.userId, isVerified: !selectedUser.isVerified })),
+      lang(selectedUser.isVerified ? 'PeyvandVerifiedRemoved' : 'PeyvandVerifiedGiven'),
     );
   });
 
@@ -251,6 +298,7 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
   function renderBadges(user: AdminUser) {
     return (
       <>
+        {user.isVerified && <VerifiedIcon />}
         {user.isAdmin && <span className={styles.badge}>{lang('MatrixAdminAdminBadge')}</span>}
         {user.isDeactivated && (
           <span className={`${styles.badge} ${styles.badgeDanger}`}>{lang('MatrixAdminDeactivatedBadge')}</span>
@@ -277,6 +325,15 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
         {!user.isDeactivated && (
           <ListItem icon="message" onClick={handleSendMessage} disabled={isBusy}>
             {lang('MatrixAdminSendMessage')}
+          </ListItem>
+        )}
+        {!user.isDeactivated && (
+          <ListItem
+            icon={user.isVerified ? 'close-circle' : 'check-filled'}
+            onClick={handleToggleVerified}
+            disabled={isBusy}
+          >
+            {lang(user.isVerified ? 'PeyvandVerifiedRemove' : 'PeyvandVerifiedGive')}
           </ListItem>
         )}
         {!user.isDeactivated && (
@@ -467,8 +524,65 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
     );
   }
 
+  function renderChannels() {
+    return (
+      <div className={styles.section}>
+        <div className={styles.toolbar}>
+          <InputText
+            id="admin-channel-search"
+            className={styles.search}
+            label={lang('PeyvandAdminSearchChannels')}
+            value={channelQuery}
+            onChange={(e) => {
+              setChannelQuery(e.target.value);
+              searchChannelsDebounced(e.target.value);
+            }}
+            autoComplete="off"
+          />
+        </div>
+        <div className={styles.hint}>{lang('PeyvandAdminChannelsHint')}</div>
+        {!channels ? <Loading /> : !channels.length ? (
+          <div className={styles.empty}>{lang('PeyvandAdminNoChannels')}</div>
+        ) : (
+          <div className={styles.list}>
+            {channels.map((channel) => (
+              <ListItem
+                key={channel.roomId}
+                leftElement={<Avatar text={channel.name} size="medium" />}
+                multiline
+                rightElement={(
+                  <Button
+                    size="smaller"
+                    color={channel.isVerified ? 'translucent' : 'primary'}
+                    disabled={isBusy}
+                    noForcedUpperCase
+                    onClick={() => handleToggleChannelVerified(channel)}
+                  >
+                    {lang(channel.isVerified ? 'PeyvandVerifiedRemove' : 'PeyvandVerifiedGive')}
+                  </Button>
+                )}
+              >
+                <span className="title">
+                  {channel.name}
+                  {channel.isVerified && <VerifiedIcon />}
+                </span>
+                <span className="subtitle">
+                  {[
+                    channel.alias,
+                    lang('Subscribers', { count: channel.membersCount }, { pluralValue: channel.membersCount }),
+                  ].filter(Boolean).join(' · ')}
+                </span>
+              </ListItem>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const tabs = useMemo(() => [
     { title: lang('MatrixAdminUsers') },
+    { title: lang('PeyvandAdminChannels') },
     { title: lang('MatrixAdminInvites') },
   ], [lang]);
 
@@ -485,7 +599,7 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
       {selectedUser ? renderUserDetails(selectedUser) : (
         <>
           <TabList tabs={tabs} activeTab={activeTab} onSwitchTab={setActiveTab} className={styles.tabs} />
-          {activeTab === 0 ? renderUsers() : renderInvites()}
+          {activeTab === 0 ? renderUsers() : activeTab === 1 ? renderChannels() : renderInvites()}
         </>
       )}
       <ConfirmDialog

@@ -118,7 +118,9 @@ async function createRegistryRoom() {
     preset: Preset.PrivateChat,
     visibility: Visibility.Private,
     room_version: REGISTRY_ROOM_VERSION,
-    initial_state: [{ type: EventType.RoomHistoryVisibility, state_key: '', content: { history_visibility: 'world_readable' } }],
+    initial_state: [{
+      type: EventType.RoomHistoryVisibility, state_key: '', content: { history_visibility: 'world_readable' },
+    }],
     power_level_content_override: {
       events_default: ADMIN_POWER_LEVEL,
       state_default: ADMIN_POWER_LEVEL,
@@ -137,9 +139,14 @@ async function joinRegistryAsAdmin(roomId: string) {
   );
 }
 
-export async function setPeerVerified({ peer, isVerified }: { peer: Pick<ApiPeer, 'id'>; isVerified: boolean }) {
+// The admin panel names people and channels by their Matrix ID, the chat menu by the chat
+export async function setPeerVerified({ peer, matrixId: givenMatrixId, isVerified }: {
+  peer?: Pick<ApiPeer, 'id'>;
+  matrixId?: string;
+  isVerified: boolean;
+}) {
   if (!await fetchIsServerAdmin()) return false;
-  const matrixId = getMatrixIdForPeer(peer);
+  const matrixId = givenMatrixId || (peer && getMatrixIdForPeer(peer));
   if (!matrixId) return false;
 
   const client = getClient();

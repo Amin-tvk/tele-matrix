@@ -3368,6 +3368,10 @@ export interface LangPair {
   'PeyvandBadgeTitle': undefined;
   'PeyvandBadgeDescription': undefined;
   'PeyvandVerifySelf': undefined;
+  'PeyvandAdminChannels': undefined;
+  'PeyvandAdminSearchChannels': undefined;
+  'PeyvandAdminChannelsHint': undefined;
+  'PeyvandAdminNoChannels': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;

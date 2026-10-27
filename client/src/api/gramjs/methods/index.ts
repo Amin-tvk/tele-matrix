@@ -14,8 +14,8 @@ export {
 } from '../../matrix/verification';
 export { setMyBadgeEmoji, setPeerVerified } from '../../matrix/verifiedBadges';
 export {
-  createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminInvites, fetchAdminUsers, fetchIsServerAdmin,
-  logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,
+  createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminChannels, fetchAdminInvites, fetchAdminUsers,
+  fetchIsServerAdmin, logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,
 } from '../../matrix/admin';
 
 export {

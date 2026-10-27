@@ -4,6 +4,8 @@ import {
   buildUser, getClient, getMyUserId, hasClient, onUpdate, rememberProfile,
 } from './client';
 import { getPeerIdByUserId } from './ids';
+import { refreshVerifiedBadges } from './verifiedBadges';
+import { isVerifiedId } from './verifiedState';
 
 // Server administration through the Synapse admin API. Every request is authorized by the server,
 // so these methods only work for accounts marked as server admins
@@ -17,7 +19,16 @@ export type AdminUser = {
   displayName?: string;
   isAdmin: boolean;
   isDeactivated: boolean;
+  isVerified: boolean;
   createdAt?: number;
+};
+
+export type AdminChannel = {
+  roomId: string;
+  name: string;
+  alias?: string;
+  membersCount: number;
+  isVerified: boolean;
 };
 
 export type AdminInvite = {
@@ -67,6 +78,7 @@ function buildAdminUser(user: SynapseUser): AdminUser {
     displayName: user.displayname || undefined,
     isAdmin: Boolean(user.admin),
     isDeactivated: Boolean(user.deactivated),
+    isVerified: isVerifiedId(user.name),
     createdAt: user.creation_ts,
   };
 }
@@ -94,6 +106,8 @@ export async function fetchAdminUsers({ query, offset = 0 }: { query?: string; o
   };
   if (query?.trim()) params.name = query.trim().replace(/^@/, '');
 
+  // The tick of each user comes from the registry
+  await refreshVerifiedBadges();
   const [{ users, total, next_token: nextToken }, rooms] = await Promise.all([
     adminRequest<{ users: SynapseUser[]; total: number; next_token?: string }>(Method.Get, '/v2/users', params),
     adminRequest<{ total_rooms: number }>(Method.Get, '/v1/rooms', { limit: '1' }).catch(() => undefined),
@@ -187,4 +201,62 @@ export async function createAdminInvite({ usesAllowed, validDays }: { usesAllowe
 export async function deleteAdminInvite({ token }: { token: string }) {
   await adminRequest(Method.Delete, `/v1/registration_tokens/${encodeURIComponent(token)}`);
   return true;
+}
+
+type SynapseRoom = {
+  room_id: string;
+  name?: string | null;
+  canonical_alias?: string | null;
+  joined_members: number;
+};
+
+type PowerLevels = { events?: Record<string, number>; events_default?: number; users_default?: number };
+
+const CHANNELS_SEARCH_LIMIT = 100;
+// Telling channels apart takes each room's power levels, so only this many rooms are looked at per search
+const CHANNELS_CHECK_LIMIT = 40;
+const CHANNEL_POWER_LEVEL = 50;
+
+// A room is a channel when only admins may post, like in builders.isRoomChannel
+function isChannelPowerLevels(levels?: PowerLevels) {
+  if (!levels) return false;
+  const usersDefault = levels.users_default ?? 0;
+  const messageLevel = levels.events?.['m.room.message'] ?? levels.events_default ?? 0;
+  return messageLevel > usersDefault && messageLevel >= CHANNEL_POWER_LEVEL;
+}
+
+export async function fetchAdminChannels({ query }: { query?: string }) {
+  const params: Record<string, string> = {
+    limit: String(CHANNELS_SEARCH_LIMIT),
+    order_by: 'joined_members',
+    dir: 'f',
+  };
+  if (query?.trim()) params.search_term = query.trim();
+
+  const [{ rooms }] = await Promise.all([
+    adminRequest<{ rooms: SynapseRoom[] }>(Method.Get, '/v1/rooms', params),
+    refreshVerifiedBadges(),
+  ]);
+  // Direct chats have no name
+  const candidates = rooms.filter(({ name }) => Boolean(name)).slice(0, CHANNELS_CHECK_LIMIT);
+
+  const checked = await Promise.all(candidates.map(async (room) => {
+    try {
+      const { state } = await adminRequest<{ state: { type: string; state_key: string; content: PowerLevels }[] }>(
+        Method.Get, `/v1/rooms/${encodeURIComponent(room.room_id)}/state`,
+      );
+      const levels = state.find(({ type, state_key: key }) => type === 'm.room.power_levels' && key === '')?.content;
+      return isChannelPowerLevels(levels) ? room : undefined;
+    } catch {
+      return undefined;
+    }
+  }));
+
+  return checked.filter(Boolean).map((room): AdminChannel => ({
+    roomId: room!.room_id,
+    name: room!.name!,
+    alias: room!.canonical_alias || undefined,
+    membersCount: room!.joined_members,
+    isVerified: isVerifiedId(room!.room_id),
+  }));
 }

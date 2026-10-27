@@ -4571,3 +4571,7 @@
 "PeyvandBadgeTitle" = "Verified Badge";
 "PeyvandBadgeDescription" = "Your account is verified. Choose whether the blue tick or an emoji appears next to your name.";
 "PeyvandVerifySelf" = "Give Yourself a Blue Tick";
+"PeyvandAdminChannels" = "Channels";
+"PeyvandAdminSearchChannels" = "Search channels";
+"PeyvandAdminChannelsHint" = "Channels on this server, largest first. A blue tick shows next to the channel's name for everyone.";
+"PeyvandAdminNoChannels" = "No channels found";
