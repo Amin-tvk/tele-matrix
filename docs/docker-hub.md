@@ -29,11 +29,15 @@ Without the two secrets the workflow still builds the images but doesn't push th
 
 ## Using the published images
 
+Ready-made images are published as [`amintvk/peyvand-web`](https://hub.docker.com/r/amintvk/peyvand-web) and
+[`amintvk/peyvand-sticker-bot`](https://hub.docker.com/r/amintvk/peyvand-sticker-bot); use your own user name if
+you publish a fork.
+
 In `.env`:
 
 ```env
-PEYVAND_WEB_IMAGE=yourname/peyvand-web:latest
-PEYVAND_STICKER_BOT_IMAGE=yourname/peyvand-sticker-bot:latest
+PEYVAND_WEB_IMAGE=amintvk/peyvand-web:latest
+PEYVAND_STICKER_BOT_IMAGE=amintvk/peyvand-sticker-bot:latest
 ```
 
 Then:
