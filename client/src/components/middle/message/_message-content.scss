@@ -1170,3 +1170,9 @@ blockquote, .blockquote {
     background-color: transparent;
   }
 }
+
+// A video sent without a thumbnail (from a phone or another app) shows a dark frame with its download button,
+// instead of a gap in the chat
+.Message .media-inner.dark {
+  background-color: #232323;
+}

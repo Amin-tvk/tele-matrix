@@ -58,36 +58,50 @@ export function preloadVideo(url: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.volume = 0;
+    // Phone browsers only decode frames of muted inline videos without a tap
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
     video.onloadedmetadata = () => resolve(video);
     video.onerror = reject;
     video.src = url;
   });
 }
 
+// The thumbnail sent with a video. Phones take a while to decode a large video, so they get more time,
+// and the frame is a small JPEG rather than a full-size PNG
+const POSTER_TIMEOUT_MS = 8000;
+const POSTER_MAX_SIDE = 640;
+const POSTER_QUALITY = 0.8;
+const POSTER_SEEK_S = 0.5;
+
 export async function createPosterForVideo(url: string): Promise<string | undefined> {
   try {
     const video = await preloadVideo(url);
 
     return await Promise.race([
-      pause(2000) as Promise<undefined>,
+      pause(POSTER_TIMEOUT_MS) as Promise<undefined>,
       new Promise<string | undefined>((resolve, reject) => {
         video.onseeked = () => {
           if (!video.videoWidth || !video.videoHeight) {
             resolve(undefined);
+            return;
           }
 
+          const scale = Math.min(1, POSTER_MAX_SIDE / Math.max(video.videoWidth, video.videoHeight));
           const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          canvas.width = Math.round(video.videoWidth * scale);
+          canvas.height = Math.round(video.videoHeight * scale);
           const ctx = canvas.getContext('2d')!;
-          ctx.drawImage(video, 0, 0);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
           canvas.toBlob((blob) => {
             resolve(blob ? URL.createObjectURL(blob) : undefined);
-          });
+          }, 'image/jpeg', POSTER_QUALITY);
         };
         video.onerror = reject;
-        video.currentTime = Math.min(video.duration, 1);
+        const { duration } = video;
+        video.currentTime = Number.isFinite(duration) && duration > 0 ? Math.min(duration / 2, POSTER_SEEK_S) : 0;
       }),
     ]);
   } catch (e) {

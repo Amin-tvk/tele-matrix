@@ -13,7 +13,7 @@ import { getPeerIdByUserId, getUserIdByPeerId } from './ids';
 import { uploadFile } from './media';
 import {
   getActiveStories, getUserStories, isStoryActive, parseStoredStories, setUserStories, STORIES_PROFILE_FIELD,
-  STORY_LIFETIME_MS,
+  STORY_LIFETIME_MS, STORY_VIEW_EVENT,
 } from './storiesState';
 import type { StoredStory } from './storiesState';
 import { getValue, setValue } from './store';
@@ -27,8 +27,38 @@ import { getVerifiedIds, isVerifiedId } from './verifiedState';
 const MAX_STORED_STORIES = 100;
 const READ_KEY_PREFIX = 'story-read:';
 
+// Who viewed a story: each viewer's app sends the owner's devices a direct message, and the owner's app keeps the
+// list in its account data, so every device of the owner shows the same viewers
+const STORY_VIEWS_EVENT = 'im.peyvand.story_views';
+const SENT_VIEW_KEY_PREFIX = 'story-view-sent:';
+const VIEWS_SAVE_DELAY_MS = 3000;
+const RECENT_VIEWERS_COUNT = 3;
+
+type ViewsByStoryId = Record<string, Record<string, number>>;
+
+let pendingViews: ViewsByStoryId | undefined;
+let viewsSaveTimeout: ReturnType<typeof setTimeout> | undefined;
+
 function getProfilePath(userId: string, field?: string) {
   return `/profile/${encodeURIComponent(userId)}${field ? `/${field}` : ''}`;
+}
+
+function getStoredViews(): ViewsByStoryId {
+  if (pendingViews) return pendingViews;
+  return getClient().getAccountData(STORY_VIEWS_EVENT as never)?.getContent<{ views?: ViewsByStoryId }>().views || {};
+}
+
+function getStoryViewers(storyId: number) {
+  return Object.entries(getStoredViews()[storyId] || {}).sort(([, a], [, b]) => b - a);
+}
+
+function buildStoryViews(storyId: number) {
+  const viewers = getStoryViewers(storyId);
+  return {
+    hasViewers: viewers.length ? true as const : undefined,
+    viewsCount: viewers.length,
+    recentViewerIds: viewers.slice(0, RECENT_VIEWERS_COUNT).map(([userId]) => getPeerIdByUserId(userId)),
+  };
 }
 
 function buildApiStory(userId: string, story: StoredStory): ApiStory | undefined {
@@ -36,6 +66,7 @@ function buildApiStory(userId: string, story: StoredStory): ApiStory | undefined
   if (!content) return undefined;
   const isMine = userId === getMyUserId();
   return {
+    views: isMine ? buildStoryViews(story.id) : undefined,
     '@type': 'story',
     id: story.id,
     peerId: getPeerIdByUserId(userId),
@@ -164,14 +195,89 @@ export async function fetchPeerStoriesByIds({ peer, ids }: { peer: ApiPeer; ids:
   return { stories, pinnedIds: [] as number[] };
 }
 
-export function viewStory() {
+// Tells the story's owner it was seen, once per story
+function reportStoryView(userId: string, storyId: number) {
+  if (userId === getMyUserId()) return;
+  const sentKey = `${SENT_VIEW_KEY_PREFIX}${userId}:${storyId}`;
+  if (getValue(sentKey)) return;
+  setValue(sentKey, '1');
+  const contentMap = new Map([[userId, new Map([['*', { story_id: storyId }]])]]);
+  getClient().sendToDevice(STORY_VIEW_EVENT, contentMap).catch(() => {
+    setValue(sentKey, '');
+  });
+}
+
+export function viewStory({ peer, storyId }: { peer: ApiPeer; storyId: number }) {
+  const userId = getUserIdForPeer(peer);
+  if (userId) reportStoryView(userId, storyId);
   return Promise.resolve(true);
 }
 
 export function markStoryRead({ peer, storyId }: { peer: ApiPeer; storyId: number }) {
   const userId = getUserIdForPeer(peer);
-  if (userId && storyId > (getLastReadId(userId) || 0)) setValue(`${READ_KEY_PREFIX}${userId}`, String(storyId));
+  if (!userId) return Promise.resolve(true);
+  if (storyId > (getLastReadId(userId) || 0)) setValue(`${READ_KEY_PREFIX}${userId}`, String(storyId));
+  reportStoryView(userId, storyId);
   return Promise.resolve(true);
+}
+
+function scheduleViewsSave() {
+  if (viewsSaveTimeout) clearTimeout(viewsSaveTimeout);
+  viewsSaveTimeout = setTimeout(() => {
+    viewsSaveTimeout = undefined;
+    const toSave = pendingViews;
+    if (!toSave || !hasClient()) return;
+    // Views of stories that no longer exist are dropped
+    const storyIds = new Set(getUserStories(getMyUserId()).map(({ id }) => String(id)));
+    const kept = Object.fromEntries(Object.entries(toSave).filter(([id]) => storyIds.has(id)));
+    getClient().setAccountData(STORY_VIEWS_EVENT as never, { views: kept } as never)
+      .then(() => {
+        if (pendingViews === toSave) pendingViews = undefined;
+      })
+      .catch((err) => {
+        if (DEBUG) console.warn('[matrix] Saving story views failed', err);
+      });
+  }, VIEWS_SAVE_DELAY_MS);
+}
+
+// A viewer's app reported a view of one of this person's stories
+export function handleStoryViewEvent(sender: string, content: { story_id?: unknown }) {
+  const storyId = Number(content.story_id);
+  const myUserId = getMyUserId();
+  const story = getUserStories(myUserId).find(({ id }) => id === storyId);
+  if (!story || sender === myUserId) return;
+  const views = getStoredViews();
+  if (views[storyId]?.[sender]) return;
+  pendingViews = { ...views, [storyId]: { ...views[storyId], [sender]: Math.floor(Date.now() / 1000) } };
+  scheduleViewsSave();
+
+  const viewer = buildUser(sender);
+  onUpdate({ '@type': 'updateUser', id: viewer.id, user: viewer });
+  const apiStory = buildApiStory(myUserId, story);
+  if (apiStory) onUpdate({ '@type': 'updateStory', peerId: getPeerIdByUserId(myUserId), story: apiStory });
+}
+
+export function fetchStoryViewList({ storyId, query }: {
+  peer: ApiPeer; storyId: number; query?: string; areJustContacts?: true; areReactionsFirst?: true;
+  limit?: number; offset?: string;
+}) {
+  const lowerQuery = query?.trim().toLowerCase();
+  const views = getStoryViewers(storyId)
+    .map(([userId, date]) => {
+      const user = buildUser(userId);
+      onUpdate({ '@type': 'updateUser', id: user.id, user });
+      return { user, date };
+    })
+    .filter(({ user }) => !lowerQuery || [user.firstName, user.lastName, user.usernames?.[0]?.username]
+      .some((part) => part?.toLowerCase().includes(lowerQuery)))
+    .map(({ user, date }) => ({ type: 'user' as const, peerId: user.id, date }));
+  return Promise.resolve({
+    views, nextOffset: undefined, reactionsCount: 0, viewsCount: views.length,
+  });
+}
+
+export function fetchStoriesViews({ storyIds }: { peer: ApiPeer; storyIds: number[] }) {
+  return Promise.resolve({ views: buildStoryViews(storyIds[0]) });
 }
 
 export async function deleteStory({ peer, storyId }: { peer: ApiPeer; storyId: number }) {

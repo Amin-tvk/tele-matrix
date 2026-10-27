@@ -29,7 +29,6 @@ import {
   selectUserSavedMusic,
 } from '../../../global/selectors';
 import { selectCurrentLimit } from '../../../global/selectors/limits';
-import { revokeAttachmentUrls } from '../../../util/attachments';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import { validateFiles } from '../../../util/files';
 import { buildCollectionByCallback } from '../../../util/iteratees';
@@ -287,21 +286,16 @@ const MusicPickerModal = ({
     loadSavedMusic({ userId: currentUserId });
   });
 
-  const showSkippedFileNotification = useLastCallback(() => {
-    showNotification({ message: lang('RichMediaSkippedFiles', { count: 1 }, { pluralValue: 1 }) });
-  });
-
   const submitContent = useLastCallback(async (
     { audio, file }: SendContent, scheduledAt?: number, scheduleRepeatPeriod?: number,
   ) => {
     closeMusicPicker();
 
-    const attachment = file && await buildAttachment(file.name, file);
-    if (attachment && !attachment.audio) {
-      revokeAttachmentUrls(attachment);
-      showSkippedFileNotification();
-      return;
-    }
+    // Audio the browser can't read is still sent, as a file, like in Telegram
+    const builtAttachment = file && await buildAttachment(file.name, file);
+    const attachment = builtAttachment && !builtAttachment.audio
+      ? { ...builtAttachment, shouldSendAsFile: true as const }
+      : builtAttachment;
 
     sendMessage({
       messageList,
@@ -348,12 +342,8 @@ const MusicPickerModal = ({
       const file = validateFiles((e.target as HTMLInputElement).files)?.[0];
       if (!file) return;
 
-      if (!SUPPORTED_AUDIO_CONTENT_TYPES.has(file.type)) {
-        showSkippedFileNotification();
-        return;
-      }
-
-      if (modal.shouldInsertToRichInput) {
+      // Formats outside the list are sent as files instead of being dropped
+      if (modal.shouldInsertToRichInput && SUPPORTED_AUDIO_CONTENT_TYPES.has(file.type)) {
         insertToRichInput({ files: [file] });
         return;
       }

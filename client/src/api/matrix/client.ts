@@ -59,6 +59,8 @@ import {
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
 import { fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { handleReactionUsageAccountData } from './reactionUsage';
+import { handleStoryViewEvent } from './stories';
+import { STORY_VIEW_EVENT } from './storiesState';
 import { buildSessionData, setSession } from './session';
 import {
   clearStore, flushStore, getValue, loadStore, setStoreName, setValue,
@@ -764,6 +766,7 @@ function subscribeToClient(matrixClient: MatrixClient) {
   matrixClient.on(UserEvent.DisplayName, handleUserProfile);
   matrixClient.on(UserEvent.AvatarUrl, handleUserProfile);
   matrixClient.on(ClientEvent.AccountData, handleAccountData);
+  matrixClient.on(ClientEvent.ToDeviceEvent, handleToDeviceEvent);
   matrixClient.on(MatrixEventEvent.Decrypted, handleDecrypted);
   matrixClient.on(HttpApiEvent.SessionLoggedOut, handleLoggedOut);
 }
@@ -1195,6 +1198,11 @@ function handleUserProfile(event: MatrixEvent | undefined, user: User) {
   const dmRoomId = dmRoomIdByUserId.get(user.userId);
   const dmRoom = dmRoomId ? client?.getRoom(dmRoomId) : undefined;
   if (dmRoom) sendUpdatedChat(dmRoom);
+}
+
+function handleToDeviceEvent(event: MatrixEvent) {
+  const sender = event.getSender();
+  if (event.getType() === STORY_VIEW_EVENT && sender) handleStoryViewEvent(sender, event.getContent());
 }
 
 function handleAccountData(event: MatrixEvent) {

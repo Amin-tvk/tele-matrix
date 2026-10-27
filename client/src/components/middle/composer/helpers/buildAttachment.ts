@@ -6,7 +6,7 @@ import {
   SUPPORTED_PHOTO_CONTENT_TYPES,
   SUPPORTED_VIDEO_CONTENT_TYPES,
 } from '../../../../config';
-import { parseAudioMetadata } from '../../../../util/audio';
+import { getAudioDuration, parseAudioMetadata } from '../../../../util/audio';
 import {
   createPosterForVideo,
   preloadImage,
@@ -90,7 +90,12 @@ async function buildAttachmentWithBlobUrl(
       };
       previewBlobUrl = coverUrl;
     } catch (err) {
-      shouldSendAsFile = true;
+      // Unusual tags shouldn't turn a song into a file: the title falls back to the file name
+      try {
+        audio = { duration: await getAudioDuration(blobUrl), title: filename.replace(FILE_EXT_REGEX, '') };
+      } catch {
+        shouldSendAsFile = true;
+      }
     }
   }
 

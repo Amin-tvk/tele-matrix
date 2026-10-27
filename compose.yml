@@ -72,6 +72,13 @@ services:
       HTTPS_PROXY: ${PUSH_PROXY:-}
     volumes:
       - ./data/sygnal:/data:ro
+    # The image's own check calls curl, which the image doesn't include, so it always reported "unhealthy"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       init:
         condition: service_completed_successfully
