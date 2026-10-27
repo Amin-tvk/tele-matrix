@@ -861,6 +861,17 @@ export type ApiUpdateEncryptionKeysMissing = {
   '@type': 'updateEncryptionKeysMissing';
 };
 
+// Signaling of a one-to-one Matrix call in the private chat with `userId`
+export type ApiUpdateMatrixCallEvent = {
+  '@type': 'updateMatrixCallEvent';
+  userId: string;
+  isOwn: boolean;
+  eventType: string;
+  content: Record<string, any>;
+  // Milliseconds since the event was sent, so stale invites aren't rung
+  age: number;
+};
+
 export type ApiUpdateFetchingDifference = {
   '@type': 'updateFetchingDifference';
   isFetching: boolean;
@@ -1038,7 +1049,7 @@ export type ApiUpdateWebPage = {
 };
 
 export type ApiUpdate = (
-  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
+  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateMatrixCallEvent | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
   ApiUpdateAuthorizationState | ApiUpdateAuthorizationError | ApiUpdateConnectionState | ApiUpdateCurrentUser |
   ApiUpdateChat | ApiUpdateChatTypingStatus | ApiUpdateChatFullInfo | ApiUpdatePinnedChatIds |
   ApiUpdateChatMembers | ApiUpdateChatParticipantRank | ApiUpdateChatJoin | ApiUpdateChatLeave

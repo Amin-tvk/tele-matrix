@@ -30,3 +30,6 @@ export const MEMBER_TAG_KEY_PREFIX = 'member:';
 // Account data event holding the user's chat folders
 export const FOLDERS_EVENT = 'im.peyvand.chat_folders';
 export const QUICK_REACTION_EVENT = 'im.peyvand.quick_reaction';
+
+// Matrix VoIP signaling for one-to-one calls: invite, answer, candidates, select_answer, reject, hangup
+export const CALL_EVENT_PREFIX = 'm.call.';

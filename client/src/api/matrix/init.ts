@@ -4,6 +4,7 @@ import { DEBUG } from '../../config';
 import { init as initUpdateEmitter } from '../gramjs/updates/apiUpdateEmitter';
 import * as admin from './admin';
 import * as auth from './auth';
+import * as calls from './calls';
 import {
   getClient, hasClient, onUpdate, retryConnectionNow, startClient, stopClient,
 } from './client';
@@ -43,6 +44,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...methods,
   ...admin,
   ...auth,
+  ...calls,
   ...encryption,
   ...directory,
   ...folders,

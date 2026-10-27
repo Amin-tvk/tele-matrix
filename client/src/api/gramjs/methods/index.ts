@@ -8,6 +8,7 @@ export {
 export { provideMatrixLogin, provideMatrixRegistration } from '../../matrix/auth';
 export { fetchEncryptionStatus, restoreEncryptionKeys, setupEncryptionRecovery } from '../../matrix/encryption';
 export { retryConnectionNow } from '../../matrix/client';
+export { fetchMatrixCallIceServers, sendMatrixCallEvent } from '../../matrix/calls';
 export {
   createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminInvites, fetchAdminUsers, fetchIsServerAdmin,
   logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,

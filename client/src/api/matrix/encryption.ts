@@ -153,12 +153,15 @@ let lastStaleKeysClearAt = 0;
 export function handleKeyUploadConflict() {
   const deviceId = getClient().getDeviceId();
   if (!deviceId) return;
-  if (getValue(BROKEN_DEVICE_KEY) !== deviceId) {
-    setValue(BROKEN_DEVICE_KEY, deviceId);
-    deviceCheck = { deviceId, isBroken: true };
-    onUpdate({ '@type': 'updateEncryptionKeysMissing' });
-  }
+  markDeviceBroken(deviceId);
   void clearStaleOneTimeKeys();
+}
+
+export function markDeviceBroken(deviceId: string) {
+  if (getValue(BROKEN_DEVICE_KEY) === deviceId) return;
+  setValue(BROKEN_DEVICE_KEY, deviceId);
+  deviceCheck = { deviceId, isBroken: true };
+  if (hasClient()) onUpdate({ '@type': 'updateEncryptionKeysMissing' });
 }
 
 // Claiming the old keys away stops the refused uploads, which the SDK would otherwise repeat forever

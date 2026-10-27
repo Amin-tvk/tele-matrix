@@ -6,9 +6,9 @@ import {
   joinGroupCall,
   leaveGroupCall,
   setVolume, startSharingScreen,
-  stopPhoneCall,
   toggleStream,
 } from '../../../lib/vibecalls';
+import { acceptMatrixCall, hangUpMatrixCall, startMatrixCall } from '../../../util/calls/matrixCall';
 import { logDebugMessage } from '../../../util/debugConsole';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { callApi } from '../../../api/gramjs';
@@ -22,7 +22,7 @@ import {
   selectChat, selectPeer, selectTabState, selectUser,
 } from '../../selectors';
 import {
-  selectActiveGroupCall, selectPhoneCallUser,
+  selectActiveGroupCall,
 } from '../../selectors/calls';
 import { getGroupCallAudioContext, getGroupCallAudioElement, removeGroupCallAudioElement } from '../ui/calls';
 import { loadFullChat } from './chats';
@@ -260,84 +260,13 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
   }
 });
 
-addActionHandler('connectToActivePhoneCall', async (global, actions): Promise<void> => {
-  const { phoneCall } = global;
-
-  if (!phoneCall) return;
-
-  const user = selectPhoneCallUser(global);
-
-  if (!user) return;
-
-  const dhConfig = await callApi('fetchDhConfig');
-
-  if (!dhConfig) return;
-
-  await callApi('createPhoneCallState', {
-    isOutgoing: true,
-    shouldUseSctp: phoneCall.customParameters?.shouldUseSctp ?? true,
-  });
-
-  const gAHash = await callApi('requestPhoneCall', dhConfig);
-
-  const result = await callApi('requestCall', { user, gAHash, isVideo: phoneCall.isVideo });
-
-  if (!result) {
-    if ('hangUp' in actions) actions.hangUp({ tabId: getCurrentTabId() });
-  }
+// One-to-one calls run over Matrix VoIP, see util/calls/matrixCall.ts
+addActionHandler('connectToActivePhoneCall', (): ActionReturnType => {
+  void startMatrixCall();
 });
 
-addActionHandler('acceptCall', async (global, actions): Promise<void> => {
-  const { phoneCall } = global;
-
-  if (!phoneCall?.gAHash) return;
-
-  const dhConfig = await callApi('fetchDhConfig');
-  if (!dhConfig) return;
-
-  await callApi('createPhoneCallState', {
-    isOutgoing: false,
-    shouldUseSctp: phoneCall.customParameters?.shouldUseSctp ?? true,
-  });
-
-  let gB;
-  try {
-    gB = await callApi('acceptPhoneCall', { ...dhConfig, gAHash: phoneCall.gAHash });
-  } catch (err) {
-    logPhoneCallDebug('Failed to accept phone call', {
-      callId: phoneCall.id,
-      error: summarizeError(err),
-    });
-    if ('hangUp' in actions) actions.hangUp({ tabId: getCurrentTabId() });
-    return;
-  }
-
-  global = getGlobal();
-  if (global.phoneCall?.id !== phoneCall.id) return;
-
-  global = {
-    ...global,
-    phoneCall: {
-      ...global.phoneCall,
-      isKeyExchangeOwner: true,
-    },
-  };
-  setGlobal(global);
-
-  const isAccepted = await callApi('acceptCall', { call: phoneCall, gB });
-  if (isAccepted) return;
-
-  global = getGlobal();
-  if (global.phoneCall?.id !== phoneCall.id) return;
-
-  global = {
-    ...global,
-    phoneCall: {
-      ...global.phoneCall,
-      isKeyExchangeOwner: undefined,
-    },
-  };
-  setGlobal(global);
+addActionHandler('acceptCall', (): ActionReturnType => {
+  void acceptMatrixCall();
 });
 
 addActionHandler('sendSignalingData', (global, actions, payload): ActionReturnType => {
@@ -405,55 +334,35 @@ addActionHandler('setCallRating', (global, actions, payload): ActionReturnType =
 });
 
 addActionHandler('hangUp', (global, actions, payload): ActionReturnType => {
-  const { isPageUnload, tabId = getCurrentTabId() } = payload || {};
+  const { tabId = getCurrentTabId() } = payload || {};
   const { phoneCall } = global;
 
   if (!phoneCall) return undefined;
 
-  if (phoneCall.state === 'discarded') {
-    callApi('destroyPhoneCallState');
-    stopPhoneCall();
-
-    global = {
-      ...global,
-      phoneCall: undefined,
-    };
-    setGlobal(global);
-    actions.toggleGroupCallPanel({ force: undefined, tabId });
-
-    actions.afterHangUp();
-
-    return undefined;
-  }
-
-  callApi('destroyPhoneCallState');
-  stopPhoneCall();
-  callApi('discardCall', { call: phoneCall, isPageUnload });
-
-  if (phoneCall.state === 'requesting') {
-    global = {
-      ...global,
-      phoneCall: undefined,
-    };
-    setGlobal(global);
-    actions.toggleGroupCallPanel({ force: undefined, tabId });
-
-    actions.afterHangUp();
-
-    return undefined;
-  }
-
-  setTimeout(() => {
+  const clear = () => {
     global = getGlobal();
     global = {
       ...global,
       phoneCall: undefined,
     };
     setGlobal(global);
-
     actions.toggleGroupCallPanel({ force: undefined, tabId });
     actions.afterHangUp();
-  }, HANG_UP_UI_DELAY);
+  };
 
+  // Already ended by the other side or by the connection
+  if (phoneCall.state === 'discarded') {
+    clear();
+    return undefined;
+  }
+
+  hangUpMatrixCall();
+
+  if (phoneCall.state === 'requesting') {
+    clear();
+    return undefined;
+  }
+
+  setTimeout(clear, HANG_UP_UI_DELAY);
   return undefined;
 });

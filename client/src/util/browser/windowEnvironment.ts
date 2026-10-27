@@ -93,6 +93,9 @@ export const IS_CANVAS_FILTER_SUPPORTED = (
 export const IS_REQUEST_FULLSCREEN_SUPPORTED = 'requestFullscreen' in document.createElement('div');
 // Telegram voice and video calls are not available over Matrix
 export const ARE_CALLS_SUPPORTED = false;
+// One-to-one calls over Matrix VoIP, see util/calls/matrixCall.ts
+export const ARE_PHONE_CALLS_SUPPORTED = typeof RTCPeerConnection !== 'undefined'
+  && Boolean(navigator.mediaDevices?.getUserMedia);
 
 export const IS_WAVE_TRANSFORM_SUPPORTED = !IS_MOBILE
   && !IS_FIREFOX // https://bugzilla.mozilla.org/show_bug.cgi?id=1961378

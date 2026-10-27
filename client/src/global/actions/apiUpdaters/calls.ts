@@ -1,6 +1,7 @@
 import type { ActionReturnType } from '../../types';
 
-import { ARE_CALLS_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { ARE_CALLS_SUPPORTED, ARE_PHONE_CALLS_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { handleMatrixCallEvent } from '../../../util/calls/matrixCall';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { omit } from '../../../util/iteratees';
 import { notifyAboutCall } from '../../../util/notifications';
@@ -10,12 +11,32 @@ import { addActionHandler, getGlobal } from '../../index';
 import { updateChat, updateChatFullInfo } from '../../reducers';
 import { removeGroupCall, updateGroupCall, updateGroupCallParticipant } from '../../reducers/calls';
 import { updateTabState } from '../../reducers/tabs';
-import { selectChat } from '../../selectors';
+import { selectChat, selectTabState } from '../../selectors';
 import { selectGroupCall, selectPhoneCallUser } from '../../selectors/calls';
 import { checkNavigatorUserMediaPermissions, initializeSounds } from '../ui/calls';
 
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   switch (update['@type']) {
+    case 'updateMatrixCallEvent': {
+      // The call's media lives in the tab that runs the connection
+      if (!ARE_PHONE_CALLS_SUPPORTED || !selectTabState(global, getCurrentTabId()).isMasterTab) return undefined;
+      const prevCallId = global.phoneCall?.id;
+      handleMatrixCallEvent(update);
+
+      global = getGlobal();
+      const call = global.phoneCall;
+      const isNewIncoming = call && call.id !== prevCallId && call.state === 'requested'
+        && call.adminId !== global.currentUserId;
+      if (!isNewIncoming) return undefined;
+
+      onTickEnd(() => {
+        global = getGlobal();
+        const user = selectPhoneCallUser(global);
+        if (user) notifyAboutCall({ call, user });
+      });
+      initializeSounds();
+      return updateTabState(global, { isCallPanelVisible: false }, getCurrentTabId());
+    }
     case 'updateGroupCall': {
       if (update.call.connectionState === 'discarded') {
         if (global.groupCalls.activeGroupCallId) {

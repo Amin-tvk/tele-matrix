@@ -7,9 +7,6 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { ApiPhoneCall, ApiUser } from '../../../api/types';
 
-import {
-  getStreams, IS_SCREENSHARE_SUPPORTED, switchCameraInputP2p, toggleStreamP2p,
-} from '../../../lib/vibecalls';
 import { selectTabState } from '../../../global/selectors';
 import { selectPhoneCallUser } from '../../../global/selectors/calls';
 import {
@@ -18,6 +15,9 @@ import {
   IS_REQUEST_FULLSCREEN_SUPPORTED,
 } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import {
+  getMatrixCallStreams, switchMatrixCallCamera, toggleMatrixCallTrack,
+} from '../../../util/calls/matrixCall';
 import { formatMediaDuration } from '../../../util/dates/duration';
 import { getServerTime } from '../../../util/serverTime';
 import { LOCAL_TGS_URLS } from '../../common/helpers/animatedAssets';
@@ -172,50 +172,25 @@ const PhoneCall = ({
   }, [isBusy, isConnected, isHangingUp, isOutgoing, lang, phoneCall?.state]);
 
   const hasVideo = phoneCall?.videoState === 'active';
-  const hasPresentation = phoneCall?.screencastState === 'active';
 
-  const streams = getStreams();
+  const streams = getMatrixCallStreams();
   const hasOwnAudio = streams?.ownAudio?.getTracks()?.[0]?.enabled ?? false;
-  const hasOwnPresentation = streams?.ownPresentation?.getTracks()?.[0]?.enabled ?? false;
   const hasOwnVideo = streams?.ownVideo?.getTracks()?.[0]?.enabled ?? false;
 
-  const [isHidingPresentation, startHidingPresentation, stopHidingPresentation] = useFlag();
   const [isHidingVideo, startHidingVideo, stopHidingVideo] = useFlag();
-
-  const handleTogglePresentation = useCallback(() => {
-    if (hasOwnPresentation) {
-      startHidingPresentation();
-    }
-    if (hasOwnVideo) {
-      startHidingVideo();
-    }
-    setTimeout(async () => {
-      await toggleStreamP2p('presentation');
-      stopHidingPresentation();
-      stopHidingVideo();
-    }, 250);
-  }, [
-    hasOwnPresentation, hasOwnVideo, startHidingPresentation, startHidingVideo, stopHidingPresentation, stopHidingVideo,
-  ]);
 
   const handleToggleVideo = useCallback(() => {
     if (hasOwnVideo) {
       startHidingVideo();
     }
-    if (hasOwnPresentation) {
-      startHidingPresentation();
-    }
-    setTimeout(async () => {
-      await toggleStreamP2p('video');
-      stopHidingPresentation();
+    setTimeout(() => {
+      toggleMatrixCallTrack('video');
       stopHidingVideo();
     }, 250);
-  }, [
-    hasOwnPresentation, hasOwnVideo, startHidingPresentation, startHidingVideo, stopHidingPresentation, stopHidingVideo,
-  ]);
+  }, [hasOwnVideo, startHidingVideo, stopHidingVideo]);
 
   const handleToggleAudio = useCallback(() => {
-    void toggleStreamP2p('audio');
+    toggleMatrixCallTrack('audio');
   }, []);
 
   const [isEmojiOpen, openEmoji, closeEmoji] = useFlag();
@@ -224,7 +199,7 @@ const PhoneCall = ({
 
   const handleFlipCamera = useCallback(() => {
     startFlipping();
-    switchCameraInputP2p();
+    void switchMatrixCallCamera();
     setTimeout(stopFlipping, 250);
   }, [startFlipping, stopFlipping]);
 
@@ -254,23 +229,10 @@ const PhoneCall = ({
       <Avatar
         peer={user}
         size="jumbo"
-        className={hasVideo || hasPresentation ? styles.blurred : ''}
+        className={hasVideo ? styles.blurred : ''}
       />
-      {phoneCall?.screencastState === 'active' && streams?.presentation
-        && <video className={styles.mainVideo} muted autoPlay playsInline srcObject={streams.presentation} />}
       {phoneCall?.videoState === 'active' && streams?.video
         && <video className={styles.mainVideo} muted autoPlay playsInline srcObject={streams.video} />}
-      <video
-        className={buildClassName(
-          styles.secondVideo,
-          !isHidingPresentation && hasOwnPresentation && styles.visible,
-          hasOwnPresentation && isFullscreen && styles.fullscreen,
-        )}
-        muted
-        autoPlay
-        playsInline
-        srcObject={hasOwnPresentation ? streams?.ownPresentation : undefined}
-      />
       <video
         className={buildClassName(
           styles.secondVideo,
@@ -326,13 +288,15 @@ const PhoneCall = ({
           isActive={hasOwnAudio}
           label={lang(hasOwnAudio ? 'CallMuteAudio' : 'CallUnmuteAudio')}
         />
-        <PhoneCallButton
-          onClick={handleToggleVideo}
-          icon="video"
-          isDisabled={!isActive}
-          isActive={hasOwnVideo}
-          label={lang(hasOwnVideo ? 'CallStopVideo' : 'CallStartVideo')}
-        />
+        {phoneCall?.isVideo && (
+          <PhoneCallButton
+            onClick={handleToggleVideo}
+            icon="video"
+            isDisabled={!isActive}
+            isActive={hasOwnVideo}
+            label={lang(hasOwnVideo ? 'CallStopVideo' : 'CallStartVideo')}
+          />
+        )}
         {hasOwnVideo && (IS_ANDROID || IS_IOS) && (
           <PhoneCallButton
             onClick={handleFlipCamera}
@@ -345,15 +309,6 @@ const PhoneCall = ({
             )}
             isDisabled={!isActive}
             label={lang('VoipFlip')}
-          />
-        )}
-        {IS_SCREENSHARE_SUPPORTED && (
-          <PhoneCallButton
-            onClick={handleTogglePresentation}
-            icon="share-screen"
-            isDisabled={!isActive}
-            isActive={hasOwnPresentation}
-            label={lang('CallScreencast')}
           />
         )}
         {isIncomingRequested && (

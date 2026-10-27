@@ -8,6 +8,7 @@ import {
   HttpApiEvent,
   IndexedDBStore,
   MatrixEventEvent,
+  Method,
   NotificationCountType,
   PendingEventOrdering,
   RelationType,
@@ -39,9 +40,12 @@ import {
   isRoomChannel,
 } from './builders';
 import {
-  INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, QUICK_REACTION_EVENT, SYNC_POLL_TIMEOUT_MS,
+  CALL_EVENT_PREFIX, INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, QUICK_REACTION_EVENT,
+  SYNC_POLL_TIMEOUT_MS,
 } from './constants';
-import { cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict } from './encryption';
+import {
+  cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict, markDeviceBroken,
+} from './encryption';
 import { handleFoldersAccountData } from './folders';
 import {
   findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
@@ -51,7 +55,7 @@ import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from '
 import { fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { buildSessionData, setSession } from './session';
 import {
-  clearStore, getValue, loadStore, setStoreName, setValue,
+  clearStore, flushStore, getValue, loadStore, setStoreName, setValue,
 } from './store';
 import { setTodoCompleterHandler, TODO_UPDATE_EVENT } from './todo';
 
@@ -170,6 +174,7 @@ const CRYPTO_PREFIX_KEY = 'crypto-prefix';
 const CRYPTO_INIT_ATTEMPTS = 3;
 const CRYPTO_RETRY_DELAY_MS = 1000;
 const STORE_ACCOUNT_MISMATCH_RE = /account in the store doesn.t match/i;
+const CRYPTO_DATABASE_SUFFIX = '::matrix-sdk-crypto';
 
 function getCryptoDatabasePrefix(userId: string, deviceId: string) {
   return `peyvand-crypto:${userId}:${deviceId}`;
@@ -186,15 +191,50 @@ function getCurrentCryptoDatabasePrefix(userId: string) {
 // The crypto store holds this device's identity and every message key it received. It is never deleted
 // because opening it failed: a new identity under the same device ID can't be published (the server keeps
 // the old keys), so no one could send this device message keys anymore
+// Names of the crypto stores on this browser, or undefined where the browser can't list them
+async function getCryptoDatabaseNames() {
+  try {
+    const databases = await self.indexedDB.databases();
+    return new Set(databases.map(({ name }) => name));
+  } catch {
+    return undefined;
+  }
+}
+
+async function hasPublishedDeviceKeys(currentClient: MatrixClient, { userId, deviceId }: MatrixSession) {
+  try {
+    const response = await currentClient.http.authedRequest<{
+      device_keys?: Record<string, Record<string, unknown>>;
+    }>(Method.Post, '/keys/query', undefined, { device_keys: { [userId]: [deviceId] } });
+    return Boolean(response.device_keys?.[userId]?.[deviceId]);
+  } catch {
+    return false;
+  }
+}
+
 async function initCrypto(currentClient: MatrixClient, session: MatrixSession, isFreshLogin?: boolean) {
   const ownPrefix = getCryptoDatabasePrefix(session.userId, session.deviceId);
-  let prefix = getValue(CRYPTO_PREFIX_KEY)
-    || (isFreshLogin ? ownPrefix : getLegacyCryptoDatabasePrefix(session.userId));
+  const legacyPrefix = getLegacyCryptoDatabasePrefix(session.userId);
+  // Chosen by the stores that exist rather than only the remembered one: the reminder may not have been saved
+  // if the browser closed right after sign-in, and opening another, empty store would recreate the identity
+  const databaseNames = isFreshLogin ? undefined : await getCryptoDatabaseNames();
+  const hasStore = (prefix: string) => databaseNames?.has(`${prefix}${CRYPTO_DATABASE_SUFFIX}`);
+  let prefix = getValue(CRYPTO_PREFIX_KEY);
+  if (!prefix || (databaseNames && !hasStore(prefix))) {
+    prefix = isFreshLogin || hasStore(ownPrefix) || (databaseNames && !hasStore(legacyPrefix))
+      ? ownPrefix : legacyPrefix;
+  }
+  // This device's keys are gone. If the server already has keys for it, a new identity under the same
+  // device ID can't receive messages again
+  if (databaseNames && !hasStore(prefix) && await hasPublishedDeviceKeys(currentClient, session)) {
+    markDeviceBroken(session.deviceId);
+  }
 
   for (let attempt = 1; attempt <= CRYPTO_INIT_ATTEMPTS; attempt++) {
     try {
       await currentClient.initRustCrypto({ cryptoDatabasePrefix: prefix });
       setValue(CRYPTO_PREFIX_KEY, prefix);
+      void flushStore();
       return;
     } catch (err) {
       // A store left from an earlier sign-in on this browser belongs to another device; this one gets its own
@@ -811,6 +851,11 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
     return;
   }
 
+  if (type.startsWith(CALL_EVENT_PREFIX)) {
+    handleCallEvent(event, room);
+    return;
+  }
+
   if (!isRoomVisible(room)) return;
 
   const context = getChatContext(room);
@@ -859,6 +904,21 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
     chatId: context.chatId,
     id: message.id,
     message,
+  });
+}
+
+// Calls only happen in private chats; the main thread runs the call and answers through `sendMatrixCallEvent`
+function handleCallEvent(event: MatrixEvent, room: Room) {
+  const sender = event.getSender();
+  const dmUserId = getDmUserId(room);
+  if (!sender || !dmUserId || (sender !== dmUserId && sender !== myUserId)) return;
+  onUpdate({
+    '@type': 'updateMatrixCallEvent',
+    userId: getPeerIdByUserId(dmUserId),
+    isOwn: sender === myUserId,
+    eventType: event.getType(),
+    content: event.getContent(),
+    age: event.getLocalAge(),
   });
 }
 

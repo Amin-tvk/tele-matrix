@@ -79,6 +79,7 @@ function scheduleFlush() {
 }
 
 async function flush() {
+  clearTimeout(flushTimeout);
   flushTimeout = undefined;
   const db = await openDb();
   if (!db || !pendingWrites.size) return;
@@ -95,6 +96,11 @@ async function flush() {
       store.put(value, key);
     }
   });
+}
+
+// Writes pending values now, for values that must survive the browser closing right away
+export function flushStore() {
+  return flush();
 }
 
 export async function clearStore() {
