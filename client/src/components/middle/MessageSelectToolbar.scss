@@ -1,3 +1,5 @@
+@use "../../styles/mixins";
+
 .MessageSelectToolbar {
   position: absolute;
   z-index: 20;
@@ -46,8 +48,9 @@
 
     font-weight: var(--font-weight-medium);
 
-    background: var(--color-background);
     box-shadow: var(--shadow-footer);
+
+    @include mixins.glass;
 
     transition: transform var(--select-transition), opacity var(--select-transition);
 

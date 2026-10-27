@@ -26,6 +26,7 @@ import {
   DEBUG,
   EPHEMERAL_MESSAGE_TTL_SECONDS,
   FOLDERS_POSITION_DEFAULT,
+  FOLDERS_POSITION_LEFT,
   GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT,
   GLOBAL_STATE_CACHE_CHAT_LIST_LIMIT,
   GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT,
@@ -266,6 +267,9 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
   return newState;
 }
 
+// Shared state version that moved folders beside the chat list
+const FOLDERS_LEFT_CACHE_VERSION = 3;
+
 export function migrateSharedCache(
   cached: SharedState | undefined,
   fallbackThemes: Partial<Record<ThemeKey, IThemeSettings>> | undefined,
@@ -289,6 +293,11 @@ export function migrateSharedCache(
           || (fallbackThemes ? cloneThemeSettings(fallbackThemes) : initialState.settings.themes),
       },
     };
+  }
+
+  // Folders moved to a column beside the chat list by default; existing installs switch once
+  if (cacheVersion < FOLDERS_LEFT_CACHE_VERSION && migrated.settings.foldersPosition !== FOLDERS_POSITION_LEFT) {
+    migrated = { ...migrated, settings: { ...migrated.settings, foldersPosition: FOLDERS_POSITION_LEFT } };
   }
 
   // Full animations became the default: settings nobody chose by hand move up to them

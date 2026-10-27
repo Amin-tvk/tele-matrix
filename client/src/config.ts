@@ -176,7 +176,8 @@ export const NNBSP = '\u202F';
 
 export const FOLDERS_POSITION_TOP = 'top';
 export const FOLDERS_POSITION_LEFT = 'left';
-export const FOLDERS_POSITION_DEFAULT = FOLDERS_POSITION_TOP;
+// A column of folders beside the chat list on wider screens, like in Telegram Desktop. Phones keep the tabs on top
+export const FOLDERS_POSITION_DEFAULT = FOLDERS_POSITION_LEFT;
 
 export const PREVIEW_AVATAR_COUNT = 3;
 

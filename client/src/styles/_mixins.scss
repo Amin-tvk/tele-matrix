@@ -140,6 +140,7 @@
 
 @mixin middle-header-pane-island {
   @include middle-header-pane-content;
+  @include glass;
 
   border-radius: var(--border-radius-pane);
   opacity: 1;
@@ -187,10 +188,23 @@
   }
 }
 
+// Translucent, blurring what's behind it; solid where the browser can't blur
+@mixin glass {
+  background-color: var(--color-glass);
+  backdrop-filter: var(--glass-filter);
+  outline: 1px solid var(--color-glass-border);
+  outline-offset: -1px;
+
+  @supports not (backdrop-filter: blur(1px)) {
+    background-color: var(--color-background);
+  }
+}
+
 @mixin composer-pill {
+  @include glass;
+
   padding: var(--composer-pill-padding);
   border-radius: var(--composer-pill-radius);
-  background: var(--color-background);
 }
 
 @mixin composer-action-button-pill {

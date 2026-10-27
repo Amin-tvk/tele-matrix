@@ -310,3 +310,20 @@
   opacity: 0 !important;
   transition: none !important;
 }
+
+// Phones: lists end above the bottom tab bar, and floating buttons sit over it
+body.has-mobile-tab-bar #LeftColumn {
+  .chat-list,
+  .settings-main-scroll {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .NewChatButton,
+  .FloatingActionButton {
+    bottom: calc(5.25rem + env(safe-area-inset-bottom));
+
+    &:not(.revealed) {
+      transform: translateY(calc(10.5rem + env(safe-area-inset-bottom)));
+    }
+  }
+}

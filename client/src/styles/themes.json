@@ -5,6 +5,8 @@
   "--color-primary-tint": ["#3390ec1a", "#8774e11a"],
   "--color-primary-shade": ["#4a95d6", "#7b71c6"],
   "--color-background": ["#FFFFFF", "#212121"],
+  "--color-glass": ["#FFFFFFB8", "#212121B3"],
+  "--color-glass-border": ["#FFFFFF99", "#FFFFFF14"],
   "--color-background-compact-menu": ["#FFFFFFBB", "#212121DD"],
   "--color-web-app-browser": ["#FFFFFFBB", "#0303038F"],
   "--color-background-compact-menu-reactions": ["#FFFFFFEB", "#212121DD"],

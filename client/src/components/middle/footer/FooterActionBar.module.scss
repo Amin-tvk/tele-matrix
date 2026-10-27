@@ -1,3 +1,5 @@
+@use "../../../styles/mixins";
+
 .root {
   position: absolute;
   inset-inline: var(--footer-side-inset);
@@ -22,8 +24,9 @@
   padding: var(--composer-pill-padding);
   border-radius: var(--composer-pill-radius);
 
-  background-color: var(--color-background);
   box-shadow: var(--shadow-footer);
+
+  @include mixins.glass;
 
   transition: opacity var(--select-transition);
 

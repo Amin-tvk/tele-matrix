@@ -23,8 +23,9 @@
   padding-left: max(0.25rem, env(safe-area-inset-left));
   border-radius: 2rem;
 
-  background: var(--color-background);
   box-shadow: var(--shadow-pane);
+
+  @include mixins.glass;
 
   /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
   transition: var(--header-transform-transition), margin-top var(--top-stack-transition);
@@ -99,8 +100,6 @@
 
     margin-left: auto;
     border-radius: 2rem;
-
-    background-color: var(--color-background);
 
     body.no-page-transitions & {
       &,

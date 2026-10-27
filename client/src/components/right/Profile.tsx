@@ -26,7 +26,8 @@ import { MAIN_THREAD_ID } from '../../api/types';
 import { LoadMoreDirection, MediaViewerOrigin, NewChatMembersProgress } from '../../types';
 
 import {
-  MEMBERS_SLICE, PROFILE_POLLS_SLICE, PROFILE_SENSITIVE_AREA, SHARED_MEDIA_SLICE, SLIDE_TRANSITION_DURATION,
+  IS_TELEGRAM_SERVICES_ENABLED, MEMBERS_SLICE, PROFILE_POLLS_SLICE, PROFILE_SENSITIVE_AREA, SHARED_MEDIA_SLICE,
+  SLIDE_TRANSITION_DURATION,
 } from '../../config';
 import {
   getHasAdminRight,
@@ -1520,7 +1521,9 @@ export default memo(withGlobal<OwnProps>(
     const hasPreviewMediaTab = userFullInfo?.botInfo?.hasPreviewMedia;
     const botPreviewMedia = global.users.previewMediaByBotId[chatId];
 
-    const hasStoriesTab = peer && (user?.isSelf || (!peer.areStoriesHidden && peerFullInfo?.hasPinnedStories))
+    // Stories are a Telegram service with no Matrix counterpart
+    const hasStoriesTab = IS_TELEGRAM_SERVICES_ENABLED && peer
+      && (user?.isSelf || (!peer.areStoriesHidden && peerFullInfo?.hasPinnedStories))
       && !isSavedMessages;
     const peerStories = hasStoriesTab ? selectPeerStories(global, peer.id) : undefined;
     const selectedStoryAlbumId = selectActiveStoriesCollectionId(global);

@@ -1,0 +1,124 @@
+@use "../../styles/mixins";
+
+// Floating glass pill at the bottom of the phone layout
+.root {
+  pointer-events: none;
+
+  position: fixed;
+  z-index: 1;
+  right: 0.75rem;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  left: 0.75rem;
+  transform: translateY(calc(100% + 1.5rem));
+
+  display: flex;
+  justify-content: space-around;
+
+  padding: 0.3125rem;
+  border-radius: 2rem;
+
+  opacity: 0;
+  box-shadow: 0 0.25rem 1.5rem rgba(0, 0, 0, 0.12);
+
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.2s;
+
+  body.no-page-transitions & {
+    transition: none;
+  }
+
+  &.shown {
+    pointer-events: auto;
+    transform: none;
+    opacity: 1;
+  }
+
+  @media (min-width: 601px) {
+    display: none;
+  }
+
+  @include mixins.glass;
+}
+
+.tab {
+  cursor: pointer;
+
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 0;
+  height: 3.375rem;
+  padding: 0;
+  border: none;
+  border-radius: 1.6875rem;
+
+  color: var(--color-text-secondary);
+
+  background: none;
+
+  transition: background-color 0.2s, color 0.2s;
+
+  -webkit-tap-highlight-color: transparent;
+
+  &:focus {
+    outline: none;
+  }
+
+  &.active {
+    color: var(--color-primary);
+    background-color: var(--color-primary-opacity);
+  }
+}
+
+.iconWrapper {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 1.625rem;
+}
+
+.icon {
+  font-size: 1.625rem;
+}
+
+.avatar {
+  flex-shrink: 0;
+}
+
+.badge {
+  position: absolute;
+  top: -0.375rem;
+  left: 1rem;
+
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 0.625rem;
+
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25rem;
+  color: var(--color-white);
+  text-align: center;
+
+  background-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-background);
+}
+
+.label {
+  overflow: hidden;
+
+  max-width: 100%;
+
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -238,6 +238,8 @@
     --border-radius-pane: 1.5rem;
     --shadow-island: 0 1px 4px 0 #0000000D;
     --shadow-pane: 0 1px 5px -1px rgba(0, 0, 0, 0.21);
+    // Frosted glass for the bars that float over the chat background, like in Telegram's current apps
+    --glass-filter: blur(1.25rem) saturate(1.8);
     --shadow-footer: 0 1px 8px 1px rgba(0, 0, 0, 0.12);
     --shadow-chat-list-panel: 0 1px 8px 0 rgba(0, 0, 0, 0.1);
     --border-radius-default: 1rem;
