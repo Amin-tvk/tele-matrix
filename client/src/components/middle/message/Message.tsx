@@ -184,6 +184,7 @@ import MessageText from '../../common/MessageText';
 import PeerColorWrapper from '../../common/PeerColorWrapper';
 import RankBadge from '../../common/RankBadge';
 import ReactionStaticEmoji from '../../common/reactions/ReactionStaticEmoji';
+import ServerLabel from '../../common/ServerLabel';
 import Sparkles from '../../common/Sparkles';
 import VerifiedIcon from '../../common/VerifiedIcon';
 import { animateSnap } from '../../main/visualEffects/SnapEffectContainer';
@@ -1837,6 +1838,9 @@ const Message = ({
               )}
               {!asForwarded && !senderEmojiStatus && senderIsPremium && <StarIcon />}
               {senderPeer?.fakeType && <FakeIcon fakeType={senderPeer.fakeType} />}
+              {!asForwarded && senderPeer && 'homeServer' in senderPeer && senderPeer.homeServer && (
+                <ServerLabel server={senderPeer.homeServer} />
+              )}
             </span>
           </span>
         ) : (!botSender && !guestFromSender) ? (

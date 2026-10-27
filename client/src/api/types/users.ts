@@ -19,6 +19,8 @@ export interface ApiUser {
   isVerified?: boolean;
   // An emoji an approved person shows instead of the blue tick; empty when none
   badgeEmoji?: string;
+  // The Matrix server of someone on another server (federation); unset for people on ours
+  homeServer?: string;
   isPremium?: boolean;
   isCloseFriend?: boolean;
   isContact?: true;

@@ -614,7 +614,7 @@ export async function searchChats({ query }: { query: string }) {
         // Other servers (matrix.org among them) hide profiles from people who share no room with the user,
         // so only a definite "not found" means the user doesn't exist
         const isRemote = getServerFromUserId(exactUserId) !== client.getDomain();
-        if (isRemote && (err as { errcode?: string }).errcode !== 'M_NOT_FOUND') {
+        if (isRemote && !isMissingRemoteUser(err)) {
           userIds.add(exactUserId);
           globalResultIds.unshift(exactPeerId);
         }
@@ -634,6 +634,13 @@ export async function searchChats({ query }: { query: string }) {
   };
 }
 
+// A remote profile that is hidden still belongs to a real user; a missing one, or a server that can't be reached
+// (a mistyped domain, say), doesn't, so no chat is started that could never deliver
+function isMissingRemoteUser(err: unknown) {
+  const { errcode, httpStatus, message } = (err || {}) as { errcode?: string; httpStatus?: number; message?: string };
+  return errcode === 'M_NOT_FOUND' || (httpStatus !== undefined && httpStatus >= 500) || message === 'Timed out';
+}
+
 export async function getChatByUsername(username: string) {
   await waitForSync();
   const client = getClient();
@@ -650,7 +657,7 @@ export async function getChatByUsername(username: string) {
     type Profile = { displayname?: string; avatar_url?: string };
     const profile = await withTimeout(client.getProfileInfo(userId)).catch((err: { errcode?: string }): Profile => {
       // Profiles on other servers may be hidden; the user can still be messaged
-      if (getServerFromUserId(userId) !== client.getDomain() && err.errcode !== 'M_NOT_FOUND') return {};
+      if (getServerFromUserId(userId) !== client.getDomain() && !isMissingRemoteUser(err)) return {};
       throw err;
     });
     rememberProfile(userId, profile.displayname, profile.avatar_url);

@@ -31,6 +31,7 @@ import CustomEmoji from './CustomEmoji';
 import FakeIcon from './FakeIcon';
 import GiftEffectWrapper from './gift/GiftEffectWrapper';
 import StarIcon from './icons/StarIcon';
+import ServerLabel from './ServerLabel';
 import VerifiedIcon from './VerifiedIcon';
 
 import styles from './FullNameTitle.module.scss';
@@ -156,6 +157,7 @@ const FullNameTitle = ({
         <>
           {!noVerified && peer?.isVerified && <VerifiedIcon emoji={isUser ? realPeer.badgeEmoji : undefined} />}
           {!noFake && peer?.fakeType && <FakeIcon fakeType={peer.fakeType} />}
+          {isUser && realPeer.homeServer && <ServerLabel server={realPeer.homeServer} />}
           {canShowEmojiStatus && emojiStatus && (
             <Transition
               className={styles.statusTransition}

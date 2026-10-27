@@ -76,6 +76,7 @@ export function buildApiUser(
   isContact?: boolean,
 ): ApiUser {
   const localpart = getLocalpart(userId);
+  const homeServer = getServerName(userId);
   return omitUndefined<ApiUser>({
     id: getPeerIdByUserId(userId),
     isMin: false,
@@ -90,6 +91,7 @@ export function buildApiUser(
     // Sent as `false` too, so taking the tick away reaches the UI
     isVerified: isVerifiedId(userId),
     badgeEmoji: getBadgeEmoji(userId) || '',
+    homeServer: homeServer && homeServer !== getServerName(myUserId) ? homeServer : undefined,
     // People with the blue tick can post stories; their avatars get the story ring
     ...getStoriesSummary(userId),
   });
