@@ -42,7 +42,9 @@ You get Telegram's speed, animations and polish. Users sign up with an invite co
 | 📶 **Weak networks** | Messages and uploads wait out dropped connections and send themselves when it's back, with a clock until delivered |
 | 📁 **Chat folders** | Telegram-style folders and filters, synced across devices |
 | ✅ **Checklists** | Shared to-do lists in chats: others can tick items or add tasks |
-| 😍 **Reactions** | Full emoji picker, double-tap quick reaction (choose your own emoji) |
+| 😍 **Reactions** | Full emoji picker, double-tap quick reaction (choose your own emoji). Your most used reactions come first, on every device |
+| ☑️ **Blue ticks** | Server admins give verified ticks to people and channels. Verified people can show an emoji of their choice instead |
+| 🔒 **Passcode lock** | Offered after signing in: locks the app on the device, by hand or automatically after 1 minute to 1 hour away |
 | 👀 **Read receipts** | See who read a message in a group, and when |
 | 🔔 **Mentions & notifications** | `@username` mentions with the @ badge, Web Push notifications through your own push gateway |
 | 🏷️ **Member tags** | Custom labels next to group members ("Designer", "Support", …) |
@@ -104,7 +106,8 @@ You need:
 - **two DNS records** (A or AAAA) pointing to the server, one for the app and one for the homeserver;
 - ports **80** and **443** open, plus **3478** (UDP and TCP) and **49160–49250** (UDP) for calls.
 
-Nothing else is installed on the host: no nginx, certbot or Node.js.
+Nothing else is installed on the host: no nginx, certbot or Node.js. Already have nginx on 80 and 443? See
+[Already running nginx?](#already-running-nginx-port-443-taken).
 
 > [!IMPORTANT]
 > `MATRIX_DOMAIN` becomes part of every user ID (`@alice:matrix.example.com`) and **cannot be changed later**. Choose it carefully.
@@ -161,36 +164,25 @@ Open `https://APP_DOMAIN` and sign in. That's it. 🎉
 Open `https://federationtester.matrix.org/#MATRIX_DOMAIN`. Every check should be green.
 </details>
 
-<details>
-<summary><b>Behind a CDN (Cloudflare, ArvanCloud, …) or another reverse proxy</b></summary>
+### Already running nginx? Port 443 taken?
 
-Caddy needs to answer Let's Encrypt on port 80. You have two options:
+If nginx (or another web server) already uses ports 80 and 443 on your server, run Peyvand without Caddy and let
+nginx serve it. Add one line to `.env`:
 
-- Turn the CDN proxy off for the two records during the first start.
-- Run without Caddy and let your own proxy handle TLS.
+```ini
+COMPOSE_FILE=compose.yml:compose.nginx.yml
+```
 
-To run without Caddy:
+Then generate and install the nginx config:
 
-1. Start everything except Caddy: `docker compose up -d --scale caddy=0`
-2. Publish the internal ports to localhost. Create `compose.override.yml`:
+```bash
+docker compose up -d
+scripts/nginx-config.sh | sudo tee /etc/nginx/conf.d/peyvand.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
 
-   ```yaml
-   services:
-     web:     { ports: ["127.0.0.1:18085:80"] }
-     synapse: { ports: ["127.0.0.1:18008:8008"] }
-     sygnal:  { ports: ["127.0.0.1:18083:5000"] }
-     ketesa:  { ports: ["127.0.0.1:18082:8080"] }
-   ```
-
-3. Route your proxy the same way as `server/caddy/Caddyfile`:
-   - `APP_DOMAIN` → web
-   - `/_matrix`, `/_synapse/client` and `/_synapse/admin` → synapse
-   - `/_matrix/push/v1/notify` → sygnal
-   - `/admin/` → ketesa
-   - the two `.well-known/matrix` responses
-
-With a CDN in front, set its SSL mode to *Full* and don't cache `/_matrix/*` or `/_synapse/*`.
-</details>
+📖 **Full guide:** [docs/nginx.md](docs/nginx.md). It covers certificates with certbot, keeping your other sites,
+CDNs (Cloudflare, ArvanCloud) and other proxies.
 
 ## ⚙️ Configuration
 
@@ -207,6 +199,8 @@ With a CDN in front, set its SSL mode to *Full* and don't cache `/_matrix/*` or 
 | `PUSH_PROXY` | | HTTP proxy for sending notifications, for servers whose IP Google's push service refuses (e.g. in Iran) |
 | `CINNY_DOMAIN` | | Domain for the optional Cinny client |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Ports Caddy listens on |
+| `COMPOSE_FILE` | — | `compose.yml:compose.nginx.yml` runs without Caddy, behind your own nginx ([guide](docs/nginx.md)) |
+| `WEB_LOCAL_PORT`, `SYNAPSE_LOCAL_PORT`, `SYGNAL_LOCAL_PORT`, `KETESA_LOCAL_PORT` | `18085`, `18008`, `18083`, `18082` | Local ports nginx proxies to, with `compose.nginx.yml` |
 | `CADDY_GLOBAL_OPTIONS` | | Extra Caddy options, e.g. `local_certs` for a local test without public DNS |
 
 The app image is built once and doesn't depend on your domain. Its container fills in the domains and the push key every time it starts, so after changing a domain run:
@@ -249,6 +243,27 @@ scripts/new-invite.sh alice 5 30   # as admin "alice": 5 uses, valid for 30 days
 2. Rename `server/caddy/sites/cinny.caddy.example` to `cinny.caddy`.
 3. Run `docker compose --profile cinny up -d`.
 
+### Blue ticks
+
+Server admins give or take a tick from a chat's **⋮** menu (**Give Blue Tick**), for people and channels. Verified
+people choose in **Settings → Edit Profile** whether the tick or an emoji appears next to their name.
+
+The ticks live in a registry room with the address `#peyvand-verified:MATRIX_DOMAIN`, which an admin's app creates
+with the first tick. Only admins can write to it, and anyone can read it without joining. Reserve the address for
+your admins in `data/synapse/homeserver.yaml`, so no one else can create it before the first tick:
+
+```yaml
+alias_creation_rules:
+  - user_id: "@alice:matrix.example.com"   # one entry per server admin
+    alias: "#peyvand-verified:*"
+    action: allow
+  - alias: "#peyvand-verified:*"
+    action: deny
+  - action: allow
+```
+
+Then run `docker compose restart synapse`.
+
 ### Last-seen privacy module
 
 `server/synapse/modules/peyvand_last_seen.py` replaces Synapse's built-in presence, which is turned off. Built-in presence shows everyone's status to anyone in a shared room.
@@ -287,6 +302,7 @@ Federation works out of the box: `.well-known` delegates it to port 443 of `MATR
 ```
 tele-matrix/
 ├── compose.yml                # The whole stack
+├── compose.nginx.yml          # Optional: no Caddy, for servers that already run nginx
 ├── .env.example               # The only file you edit
 ├── client/                    # Web app: Telegram Web A + the Matrix layer
 │   ├── Dockerfile             # Build → nginx image, domains filled in at start
@@ -295,8 +311,10 @@ tele-matrix/
 │   ├── init/init.py           # First-start generator for configs, secrets and keys
 │   ├── templates/             # Synapse, Sygnal, Ketesa and Cinny config templates
 │   ├── synapse/modules/       # peyvand_last_seen.py: last-seen privacy module
-│   └── caddy/                 # Caddyfile (HTTPS + routing) and optional sites
-├── scripts/                   # create-admin.sh, new-invite.sh
+│   ├── caddy/                 # Caddyfile (HTTPS + routing) and optional sites
+│   └── nginx/                 # nginx config template for the compose.nginx.yml setup
+├── scripts/                   # create-admin.sh, new-invite.sh, nginx-config.sh
+├── docs/                      # nginx.md: running behind your own nginx
 ├── tests/e2e/                 # Playwright end-to-end scripts
 ├── brand/                     # Logo and icon generator
 └── data/                      # ← created on first start: secrets, database, media (git-ignored)

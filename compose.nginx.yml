@@ -1,0 +1,20 @@
+# For servers that already run nginx (or another proxy) on ports 80 and 443. Caddy is left out and every service is
+# published on 127.0.0.1 only, for nginx to proxy. Turn it on in .env:
+#   COMPOSE_FILE=compose.yml:compose.nginx.yml
+# then `docker compose up -d` as usual. See docs/nginx.md
+services:
+  caddy:
+    # Never started
+    profiles: [disabled]
+
+  web:
+    ports: ["127.0.0.1:${WEB_LOCAL_PORT:-18085}:80"]
+
+  synapse:
+    ports: ["127.0.0.1:${SYNAPSE_LOCAL_PORT:-18008}:8008"]
+
+  sygnal:
+    ports: ["127.0.0.1:${SYGNAL_LOCAL_PORT:-18083}:5000"]
+
+  ketesa:
+    ports: ["127.0.0.1:${KETESA_LOCAL_PORT:-18082}:8080"]
