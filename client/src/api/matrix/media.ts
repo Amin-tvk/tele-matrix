@@ -10,6 +10,7 @@ import {
 import * as cacheApi from '../../util/cacheApi';
 import { THUMBNAIL_SEPARATOR } from './constants';
 import { decodeMxc } from './ids';
+import { retryOnNetworkError } from './retry';
 import { getAuthHeaders, getHomeserverUrl } from './session';
 import { getValue, setValue } from './store';
 
@@ -355,10 +356,11 @@ export function uploadContent(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(JSON.parse(xhr.responseText).content_uri);
       } else {
-        reject(new Error(`Upload failed: ${xhr.status}`));
+        reject(Object.assign(new Error(`Upload failed: ${xhr.status}`), { httpStatus: xhr.status }));
       }
     };
-    xhr.onerror = () => reject(new Error('Upload failed'));
+    // Named like the SDK's network errors, so the upload is retried once the connection is back
+    xhr.onerror = () => reject(Object.assign(new Error('Upload failed'), { name: 'ConnectionError' }));
     xhr.onabort = () => reject(new Error('Upload canceled'));
     xhr.send(data);
   });
@@ -367,11 +369,15 @@ export function uploadContent(
 export async function uploadFile(
   blob: Blob, fileName: string, mimeType: string, isEncrypted: boolean, onProgress?: ApiOnProgress,
 ): Promise<{ url?: string; file?: EncryptedFile }> {
+  // The server can't resume an upload, so an interrupted one starts over once the connection is back
+  const isCanceled = () => Boolean(onProgress?.isCanceled);
   if (!isEncrypted) {
-    return { url: await uploadContent(blob, fileName, mimeType, onProgress) };
+    return { url: await retryOnNetworkError(() => uploadContent(blob, fileName, mimeType, onProgress), isCanceled) };
   }
 
   const { data, info } = await encryptAttachment(await blob.arrayBuffer());
-  const url = await uploadContent(data, fileName, 'application/octet-stream', onProgress);
+  const url = await retryOnNetworkError(
+    () => uploadContent(data, fileName, 'application/octet-stream', onProgress), isCanceled,
+  );
   return { file: { ...info, url, mimetype: mimeType } };
 }

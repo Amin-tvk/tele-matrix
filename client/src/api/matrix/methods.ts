@@ -90,6 +90,7 @@ import {
 import {
   DEVICE_DISPLAY_NAME, FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PUSH_APP_ID, PUSH_GATEWAY_URL, ROUND_VIDEO_KEY,
 } from './constants';
+import { findRoomByAddress, searchPublicRooms, withTimeout } from './directory';
 import { buildHtmlFromFormattedText } from './html';
 import {
   decodeMxc,
@@ -102,8 +103,8 @@ import {
   getUserIdByPeerId,
   isUserPeerId,
 } from './ids';
-import { findRoomByAddress, searchPublicRooms, withTimeout } from './directory';
 import { uploadContent, uploadFile } from './media';
+import { retryOnNetworkError } from './retry';
 import { buildTodoContent, buildTodoUpdateContent, TODO_UPDATE_EVENT } from './todo';
 
 const WINDOW_PAGE_SIZE = 50;
@@ -1208,7 +1209,7 @@ export async function searchMessagesGlobal({
 
 export function sendMessageLocal(params: SendMessageParams) {
   const {
-    chat, lastMessageId, text, entities, replyInfo, attachment, sticker, gif, groupedId, wasDrafted, isPending, todo,
+    chat, lastMessageId, text, entities, replyInfo, attachment, sticker, gif, groupedId, wasDrafted, todo,
   } = params;
   if (!chat) return undefined;
 
@@ -1233,7 +1234,8 @@ export function sendMessageLocal(params: SendMessageParams) {
     groupedId,
     isInAlbum: groupedId && media && (media.photo || media.video) ? true : undefined,
     isForwardingAllowed: true,
-    sendingState: isPending ? 'messageSendingStatePending' : undefined,
+    // Shown with a clock until the server has it, like in Telegram
+    sendingState: 'messageSendingStatePending',
   });
 
   const emojiOnlyCount = getEmojiOnlyCountForMessage(message.content, message.groupedId);
@@ -1353,7 +1355,13 @@ async function sendRoomEvent(room: Room, type: string, content: Record<string, u
   const txnId = client.makeTxnId();
   pendingTxnIds.add(txnId);
   try {
-    const { event_id: eventId } = await client.sendEvent(room.roomId, type as never, content as never, txnId);
+    // Resent with the same transaction ID after a dropped connection, so the server never stores it twice
+    const { event_id: eventId } = await retryOnNetworkError(() => {
+      const failed = room.getPendingEvents().find((event) => event.getTxnId() === txnId);
+      return failed
+        ? client.resendEvent(failed, room)
+        : client.sendEvent(room.roomId, type as never, content as never, txnId);
+    });
     sentEventIds.add(eventId);
     return { eventId, txnId };
   } finally {

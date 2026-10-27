@@ -777,6 +777,8 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       global = updateChatMessage(global, chatId, message.id, {
         ...currentMessage,
         ...message,
+        // The server has it now; undefined fields don't survive the trip from the API worker
+        sendingState: message.sendingState,
         previousLocalId: localId,
         isDeleting: undefined,
       });
