@@ -105,6 +105,7 @@ const MAX_INVALID_ATTEMPTS = 5;
 const INVALID_ATTEMPTS_TIMEOUT_BASE_MS = 30 * 1000;
 const INVALID_ATTEMPTS_TIMEOUT_MAX_MS = 5 * 60 * 1000;
 const API_TEARDOWN_TIMEOUT_MS = 3000;
+const DEFAULT_AUTOLOCK_DURATION_MS = 60 * 60 * 1000;
 
 let apiTeardownPromise: Promise<void> | undefined;
 
@@ -145,6 +146,10 @@ addActionHandler('setPasscode', async (global, actions, payload): Promise<void> 
       isLoading: false,
     });
     forceUpdateCache();
+    if (isNewPasscode) {
+      // Like Telegram's apps, a new passcode also locks the app after an hour away
+      actions.setPasscodeAutolockDuration({ duration: DEFAULT_AUTOLOCK_DURATION_MS });
+    }
     if (hadPasskey) {
       actions.showNotification({ message: { key: 'PasscodePasskeyRemovedChange' }, tabId });
     }

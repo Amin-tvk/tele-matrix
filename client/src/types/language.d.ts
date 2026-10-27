@@ -3358,6 +3358,9 @@ export interface LangPair {
   'MatrixDeviceBrokenWarning': undefined;
   'MatrixVerifyWithDevice': undefined;
   'MatrixVerifyTitle': undefined;
+  'PasscodeOfferTitle': undefined;
+  'PasscodeOfferText': undefined;
+  'PasscodeOfferSetUp': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;

@@ -1,25 +1,40 @@
 import type { FC } from '../../../../lib/teact/teact';
-import { memo, useCallback } from '../../../../lib/teact/teact';
+import { memo, useCallback, useMemo } from '../../../../lib/teact/teact';
+import { getActions, withGlobal } from '../../../../global';
 
 import { STICKER_SIZE_PASSCODE } from '../../../../config';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
+import { buildAutolockOptions } from './autolockOptions';
 
 import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useLang from '../../../../hooks/useLang';
+import useLastCallback from '../../../../hooks/useLastCallback';
 
 import AnimatedIcon from '../../../common/AnimatedIcon';
-import Island from '../../../gili/layout/Island';
+import Island, { IslandTitle } from '../../../gili/layout/Island';
 import Button from '../../../ui/Button';
+import RadioGroup from '../../../ui/RadioGroup';
 
 type OwnProps = {
   isActive?: boolean;
   onReset: (forceReturnToChatList?: boolean) => void;
 };
 
-const SettingsPasscodeCongratulations: FC<OwnProps> = ({
-  isActive, onReset,
+type StateProps = {
+  autolockDuration?: number;
+};
+
+const SettingsPasscodeCongratulations: FC<OwnProps & StateProps> = ({
+  isActive, autolockDuration, onReset,
 }) => {
+  const { setPasscodeAutolockDuration } = getActions();
   const lang = useLang();
+
+  // When to lock by itself is picked right away; it stays changeable in the passcode settings
+  const autolockOptions = useMemo(() => buildAutolockOptions(lang), [lang]);
+  const handleAutolockChange = useLastCallback((value: string) => {
+    setPasscodeAutolockDuration({ duration: Number(value) || undefined });
+  });
 
   const fullReset = useCallback(() => {
     onReset(true);
@@ -41,6 +56,16 @@ const SettingsPasscodeCongratulations: FC<OwnProps> = ({
         </p>
       </div>
 
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('PasscodeAutoLockTitle')}</IslandTitle>
+      <Island>
+        <RadioGroup
+          name="passcode-autolock-new"
+          options={autolockOptions}
+          selected={String(autolockDuration || 0)}
+          onChange={handleAutolockChange}
+        />
+      </Island>
+
       <Island>
         <Button onClick={fullReset}>{lang('Back')}</Button>
       </Island>
@@ -48,4 +73,8 @@ const SettingsPasscodeCongratulations: FC<OwnProps> = ({
   );
 };
 
-export default memo(SettingsPasscodeCongratulations);
+export default memo(withGlobal<OwnProps>(
+  (global): Complete<StateProps> => ({
+    autolockDuration: global.passcode.autolockDuration,
+  }),
+)(SettingsPasscodeCongratulations));

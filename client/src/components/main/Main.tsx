@@ -89,6 +89,7 @@ import ForwardRecipientPicker from './ForwardRecipientPicker.async';
 import GameModal from './GameModal';
 import HistoryCalendar from './HistoryCalendar.async';
 import MobileTabBar from './MobileTabBar';
+import PasscodeOfferModal from './PasscodeOfferModal';
 import NewContactModal from './NewContactModal.async';
 import PremiumLimitReachedModal from './premium/common/PremiumLimitReachedModal.async';
 import GiveawayModal from './premium/GiveawayModal.async';
@@ -637,6 +638,7 @@ const Main = ({
       <FoldersSidebar isMobile={isMobile} isActive={isFoldersSidebarShown} />
       <LeftColumn ref={leftColumnRef} isFoldersSidebarShown={isFoldersSidebarShown} />
       {isMobile && <MobileTabBar isChatOpen={isMiddleColumnOpen} />}
+      {isMasterTab && <PasscodeOfferModal />}
       <MiddleColumn
         leftColumnRef={leftColumnRef}
         isMobile={isMobile}
