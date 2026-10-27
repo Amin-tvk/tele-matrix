@@ -1,6 +1,7 @@
 # Peyvand web app. The bundle is built once with placeholders; the container fills in the domains and the
 # push key from its environment when it starts, so the same image works for any deployment.
-FROM node:24-bookworm AS build
+# The bundle is the same for every platform, so it is built natively and only the nginx stage is per platform
+FROM --platform=$BUILDPLATFORM node:24-bookworm AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./

@@ -95,13 +95,13 @@ services:
       init:
         condition: service_completed_successfully
 
-  # The Peyvand web app, built from ./client
+  # The Peyvand web app, built from ./client, or pulled from Docker Hub when PEYVAND_WEB_IMAGE is set
   web:
     build:
       context: ./client
       args:
         APP_TITLE: ${APP_TITLE:-Peyvand}
-    image: peyvand-web
+    image: ${PEYVAND_WEB_IMAGE:-peyvand-web}
     restart: unless-stopped
     environment: *settings
     volumes:
@@ -157,6 +157,7 @@ services:
   # Enable with: docker compose --profile stickers up -d
   sticker-bot:
     build: ./server/sticker-bot
+    image: ${PEYVAND_STICKER_BOT_IMAGE:-peyvand-sticker-bot}
     restart: unless-stopped
     profiles: [stickers]
     environment:

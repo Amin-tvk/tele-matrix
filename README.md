@@ -280,6 +280,11 @@ alias_creation_rules:
 
 Then run `docker compose restart synapse`.
 
+### Ready-made images on Docker Hub
+
+A GitHub Actions workflow builds the web app and sticker bot images and pushes them to Docker Hub, so servers can
+pull them instead of building: [docs/docker-hub.md](docs/docker-hub.md).
+
 ### Sticker packs
 
 Tele has a sticker panel. An optional bot (`@stickers`) brings Telegram sticker packs to your server from a
