@@ -71,6 +71,14 @@ experimental_features:
   msc4222_enabled: true
 max_event_delay_duration: 24h
 
+# Voice and video calls: clients get short-lived credentials for the coturn relay
+turn_uris:
+  - "turn:{{TURN_HOST}}:3478?transport=udp"
+  - "turn:{{TURN_HOST}}:3478?transport=tcp"
+turn_shared_secret: "{{TURN_SECRET}}"
+turn_user_lifetime: 86400000
+turn_allow_guests: false
+
 # Group owners can list their public groups in the room directory, so people on any server can find them
 room_list_publication_rules:
   - action: allow

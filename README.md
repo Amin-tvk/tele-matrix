@@ -38,7 +38,8 @@ You get Telegram's speed, animations and polish. Users sign up with an invite co
 | | |
 |---|---|
 | 💬 **Messaging** | Private chats, groups and channels, replies, edits, forwards, pins, drafts, search |
-| 🔐 **End-to-end encryption** | Matrix E2EE (Olm/Megolm) with a recovery key or passphrase to restore history on new devices |
+| 🔐 **End-to-end encryption** | Matrix E2EE (Olm/Megolm). A new sign-in is verified from another device by comparing emojis, or with a recovery key or passphrase |
+| 📶 **Weak networks** | Messages and uploads wait out dropped connections and send themselves when it's back, with a clock until delivered |
 | 📁 **Chat folders** | Telegram-style folders and filters, synced across devices |
 | ✅ **Checklists** | Shared to-do lists in chats: others can tick items or add tasks |
 | 😍 **Reactions** | Full emoji picker, double-tap quick reaction (choose your own emoji) |
@@ -46,6 +47,7 @@ You get Telegram's speed, animations and polish. Users sign up with an invite co
 | 🔔 **Mentions & notifications** | `@username` mentions with the @ badge, Web Push notifications through your own push gateway |
 | 🏷️ **Member tags** | Custom labels next to group members ("Designer", "Support", …) |
 | 🕶️ **Last-seen privacy** | Everybody / My Contacts / Nobody plus per-person and per-group exceptions, **enforced on the server** (server admins always see exact times) |
+| 📞 **Voice & video calls** | One-to-one calls over Matrix VoIP, with the bundled coturn relay so calls connect behind mobile NAT. Work with Element too |
 | 🎙️ **Voice & video messages** | Record voice or round video messages, switch to the back camera while recording, 1×/1.5×/2× playback, seek by dragging |
 | 📎 **Media** | Photos, videos, files, music, albums, encrypted uploads, streaming playback with seeking |
 | 📱 **Mobile-first** | Installable PWA, swipe back from a chat, swipe to reply, smooth Telegram animations |
@@ -100,7 +102,7 @@ You need:
 - a Linux server with **Docker** (Compose v2 included);
 - **2 GB RAM** or more (the first build of the app needs about 4 GB, or add swap);
 - **two DNS records** (A or AAAA) pointing to the server, one for the app and one for the homeserver;
-- ports **80** and **443** open.
+- ports **80** and **443** open, plus **3478** (UDP and TCP) and **49160–49250** (UDP) for calls.
 
 Nothing else is installed on the host: no nginx, certbot or Node.js.
 
@@ -201,6 +203,7 @@ With a CDN in front, set its SSL mode to *Full* and don't cache `/_matrix/*` or 
 | `ADMIN_EMAIL` | | **Required.** Let's Encrypt account and Web Push contact |
 | `APP_TITLE` | `Peyvand` | App name in the browser tab and when installed. Rebuild after changing: `docker compose build web` |
 | `PUSH_APP_ID` | `com.example.peyvand.web` | Web Push app ID. Set it before the first start |
+| `PUBLIC_IP` | | Public IPv4 of the server, for the call relay. Needed when `MATRIX_DOMAIN` is behind a CDN or proxy |
 | `CINNY_DOMAIN` | | Domain for the optional Cinny client |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Ports Caddy listens on |
 | `CADDY_GLOBAL_OPTIONS` | | Extra Caddy options, e.g. `local_certs` for a local test without public DNS |
@@ -380,6 +383,18 @@ Synapse allows requests from any origin by default, so the dev server can talk t
 Screenshots are saved to `tests/e2e/out/`.
 
 ## 🩺 Troubleshooting
+
+<details>
+<summary><b>Calls ring but never connect</b></summary>
+
+The call relay must be reachable from the internet:
+
+- open **3478** (UDP and TCP) and **49160–49250** (UDP) in the firewall and at your hosting provider;
+- if `MATRIX_DOMAIN` goes through a CDN or proxy, set `PUBLIC_IP` in `.env`. A CDN doesn't pass the relay's UDP traffic;
+- check the relay with `docker compose logs coturn`.
+
+Installs created before calls were added keep their old `data/synapse/homeserver.yaml`. Copy the `turn_*` lines from `server/templates/homeserver.yaml.tmpl` into it (the secret is in `data/secrets/turn_secret`), then `docker compose up -d` and `docker compose restart synapse`.
+</details>
 
 <details>
 <summary><b>No HTTPS certificate / browser shows a certificate error</b></summary>

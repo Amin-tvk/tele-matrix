@@ -32,6 +32,9 @@ settings = {
     "ADMIN_EMAIL": os.environ.get("ADMIN_EMAIL", "").strip() or f"admin@{os.environ['MATRIX_DOMAIN']}",
     "PUSH_APP_ID": os.environ.get("PUSH_APP_ID", "").strip() or "com.example.peyvand.web",
 }
+# The call relay is reached by IP when given: a CDN in front of the domain wouldn't pass its UDP traffic
+public_ip = os.environ.get("PUBLIC_IP", "").strip()
+settings["TURN_HOST"] = public_ip or settings["MATRIX_DOMAIN"]
 
 
 def report(path, created):
@@ -91,6 +94,7 @@ def chown_tree(path, uid):
 
 # Database
 postgres_password = write_once(DATA / "secrets/postgres_password", lambda: secrets.token_hex(32), 0o644)
+turn_secret = write_once(DATA / "secrets/turn_secret", lambda: secrets.token_hex(32), 0o600)
 
 # Synapse
 synapse_dir = DATA / "synapse"
@@ -100,6 +104,7 @@ write_once(synapse_dir / "homeserver.yaml", lambda: render("homeserver.yaml.tmpl
     "REGISTRATION_SHARED_SECRET": secrets.token_hex(32),
     "MACAROON_SECRET_KEY": secrets.token_hex(32),
     "FORM_SECRET": secrets.token_hex(32),
+    "TURN_SECRET": turn_secret,
 }), 0o600)
 write_once(synapse_dir / "log.config", lambda: (TEMPLATES / "log.config").read_text())
 write_once(synapse_dir / "signing.key", make_signing_key, 0o600)
@@ -111,6 +116,13 @@ sygnal_dir = DATA / "sygnal"
 vapid_pem = write_once(sygnal_dir / "vapid_private.pem", make_vapid_key, 0o644)
 (sygnal_dir / "vapid_public.txt").write_text(vapid_public_key(vapid_pem + "\n"))
 write_once(sygnal_dir / "sygnal.yaml", lambda: render("sygnal.yaml.tmpl", settings))
+
+# Call relay
+write_once(DATA / "coturn/turnserver.conf", lambda: render("turnserver.conf.tmpl", {
+    **settings,
+    "TURN_SECRET": turn_secret,
+    "TURN_EXTERNAL_IP_LINE": f"external-ip={public_ip}" if public_ip else "# external-ip is set from PUBLIC_IP in .env",
+}))
 
 # Admin UI and the optional Cinny client
 write_once(DATA / "ketesa.json", lambda: render("ketesa.json.tmpl", settings))

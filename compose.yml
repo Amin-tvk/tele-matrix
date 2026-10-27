@@ -9,6 +9,7 @@ x-settings: &settings
   MATRIX_DOMAIN: ${MATRIX_DOMAIN:?Set MATRIX_DOMAIN in .env}
   ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
   PUSH_APP_ID: ${PUSH_APP_ID:-com.example.peyvand.web}
+  PUBLIC_IP: ${PUBLIC_IP:-}
 
 services:
   # One-off: generates configs, secrets and keys, then exits
@@ -73,6 +74,17 @@ services:
       init:
         condition: service_completed_successfully
     networks: [frontend]
+
+  # TURN relay for voice and video calls. Host networking: it uses a whole range of UDP ports
+  coturn:
+    image: coturn/coturn:4.6.3
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./data/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
 
   # The Peyvand web app, built from ./client
   web:
