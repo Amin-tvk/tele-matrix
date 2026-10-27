@@ -27,6 +27,7 @@ import { MAIN_THREAD_ID } from '../types/messages';
 
 import { DEBUG } from '../../config';
 import Deferred from '../../util/Deferred';
+import { omitUndefined } from '../../util/iteratees';
 import { pause } from '../../util/schedulers';
 import { sendApiUpdate } from '../gramjs/updates/apiUpdateEmitter';
 import {
@@ -40,6 +41,10 @@ import {
   isRoomChannel,
 } from './builders';
 import {
+  addCommentToSummary, areCommentsEnabled, getCommentRootEventId, getCommentsChatId, getKnownCommentRootId,
+  getThreadSummary, isCommentEvent, removeCommentFromSummary, setThreadSummaryCount,
+} from './comments';
+import {
   CALL_EVENT_PREFIX, INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, QUICK_REACTION_EVENT,
   SYNC_POLL_TIMEOUT_MS,
 } from './constants';
@@ -47,20 +52,20 @@ import {
   cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict, markDeviceBroken,
 } from './encryption';
 import { handleFoldersAccountData } from './folders';
-import { handleReactionUsageAccountData } from './reactionUsage';
-import { startVerifiedBadgesPolling } from './verifiedBadges';
 import {
-  findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
+  findMessageId, getChatIdByRoomId, getEventId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
   isUserPeerId,
 } from './ids';
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
 import { fetchWithDeadline, setKeyUploadConflictHandler } from './network';
+import { handleReactionUsageAccountData } from './reactionUsage';
 import { buildSessionData, setSession } from './session';
 import {
   clearStore, flushStore, getValue, loadStore, setStoreName, setValue,
 } from './store';
 import { setTodoCompleterHandler, TODO_UPDATE_EVENT } from './todo';
 import { watchDeviceVerificationRequests } from './verification';
+import { startVerifiedBadgesPolling } from './verifiedBadges';
 
 let client: MatrixClient | undefined;
 let myUserId = '';
@@ -559,6 +564,99 @@ export function getLastMessage(room: Room) {
   return undefined;
 }
 
+/* Comments under channel posts */
+
+const announcedCommentsChatIds = new Set<string>();
+
+// The virtual discussion chat holding a channel's comments; never listed among the chats
+export function buildCommentsChat(room: Room): ApiChat {
+  const channel = buildChat(room);
+  return omitUndefined<ApiChat>({
+    id: getCommentsChatId(room.roomId),
+    type: 'chatTypeSuperGroup',
+    title: channel.title,
+    avatarPhotoId: channel.avatarPhotoId,
+    membersCount: channel.membersCount,
+    creationDate: channel.creationDate,
+    adminRights: channel.adminRights,
+    isOwner: channel.isOwner,
+    // Like a discussion group commented in without joining, which keeps it out of the chat list
+    isNotJoined: true,
+  });
+}
+
+export function announceCommentsChat(room: Room) {
+  const chat = buildCommentsChat(room);
+  if (announcedCommentsChatIds.has(chat.id)) return chat.id;
+  announcedCommentsChatIds.add(chat.id);
+  onUpdate({ '@type': 'updateChat', id: chat.id, chat });
+  return chat.id;
+}
+
+// Gives a channel post its comments button with the number of comments
+export function announceCommentsInfo(room: Room, postEvent: MatrixEvent) {
+  const postEventId = postEvent.getId();
+  const messageId = postEventId ? findMessageId(postEventId) : undefined;
+  if (!messageId) return;
+  const commentsChatId = announceCommentsChat(room);
+  const { count, recentSenders } = getThreadSummary(postEvent);
+  onUpdate({
+    '@type': 'updateThreadInfo',
+    threadInfo: {
+      isCommentsInfo: true,
+      chatId: commentsChatId,
+      originChannelId: getChatIdForRoom(room),
+      originMessageId: messageId,
+      messagesCount: count,
+      recentReplierIds: recentSenders.map((userId) => getPeerIdByUserId(userId)),
+    },
+  });
+}
+
+const requestedSummaryIds = new Set<string>();
+
+// Posts from /sync come without the number of comments, which the server adds when asked for the post itself
+async function fetchExactThreadSummary(room: Room, postEvent: MatrixEvent) {
+  const postId = postEvent.getId()!;
+  if (requestedSummaryIds.has(postId)) return;
+  requestedSummaryIds.add(postId);
+  try {
+    const raw = await client!.fetchRoomEvent(room.roomId, postId);
+    const bundled = raw.unsigned?.['m.relations']?.[RelationType.Thread] as
+      { count?: number; latest_event?: { sender?: string } } | undefined;
+    setThreadSummaryCount(postId, bundled?.count || 0, bundled?.latest_event?.sender);
+    announceCommentsInfo(room, postEvent);
+  } catch {
+    requestedSummaryIds.delete(postId);
+  }
+}
+
+function isChannelPost(event: MatrixEvent) {
+  return event.getType() === EventType.RoomMessage && !event.isRedacted()
+    && event.getRelation()?.rel_type !== RelationType.Replace;
+}
+
+export function announceCommentThreads(room: Room, messages: ApiMessage[]) {
+  if (!isRoomChannel(room) || !areCommentsEnabled(room)) return;
+  messages.forEach(({ id, content }) => {
+    if (content.action) return;
+    const eventId = getEventId(room.roomId, Math.floor(id));
+    const event = eventId ? room.findEventById(eventId) : undefined;
+    if (!event || !isChannelPost(event)) return;
+    announceCommentsInfo(room, event);
+    if (!getThreadSummary(event).isExact) void fetchExactThreadSummary(room, event);
+  });
+}
+
+// Turning comments on gives the posts already on screen their comment buttons
+function announceTimelineCommentThreads(room: Room) {
+  if (!isRoomChannel(room) || !areCommentsEnabled(room)) return;
+  room.getLiveTimeline().getEvents().filter(isChannelPost).forEach((event) => {
+    announceCommentsInfo(room, event);
+    if (!getThreadSummary(event).isExact) void fetchExactThreadSummary(room, event);
+  });
+}
+
 export function rememberReactionTargets(room: Room) {
   room.getLiveTimeline().getEvents().forEach((event) => {
     if (event.getType() !== EventType.Reaction) return;
@@ -835,6 +933,7 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
       setTimeout(() => sendUpdatedChat(room), 0);
     } else {
       sendUpdatedChat(room);
+      if (type === EventType.RoomPowerLevels) announceTimelineCommentThreads(room);
     }
     if (type === EventType.RoomMember && event.getStateKey()) {
       const userId = event.getStateKey()!;
@@ -896,7 +995,7 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
   }
 
   await ensureReplyTargetsKnown(room, [event]);
-  const message = buildApiMessage(event, room, context);
+  const message = buildApiMessage(event, room, { ...context, withComments: true });
   if (!message) return;
 
   if (event.isDecryptionFailure()) undecryptableEventIds.add(event.getId()!);
@@ -904,12 +1003,22 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
   const sender = event.getSender();
   if (sender) announceUser(sender, room);
 
+  const commentRootId = isCommentEvent(event) ? getCommentRootEventId(event) : undefined;
+  if (commentRootId) announceCommentsChat(room);
+
   onUpdate({
     '@type': 'newMessage',
-    chatId: context.chatId,
+    chatId: message.chatId,
     id: message.id,
     message,
   });
+
+  if (commentRootId) {
+    const post = room.findEventById(commentRootId);
+    if (post && addCommentToSummary(post, event)) announceCommentsInfo(room, post);
+  } else if (context.isChannel && areCommentsEnabled(room)) {
+    announceCommentsInfo(room, event);
+  }
 }
 
 // Calls only happen in private chats; the main thread runs the call and answers through `sendMatrixCallEvent`
@@ -928,7 +1037,7 @@ function handleCallEvent(event: MatrixEvent, room: Room) {
 }
 
 function sendMessageUpdate(room: Room, event: MatrixEvent) {
-  const message = buildApiMessage(event, room, getChatContext(room));
+  const message = buildApiMessage(event, room, { ...getChatContext(room), withComments: true });
   if (!message) return;
   onUpdate({
     '@type': 'updateMessage',
@@ -940,7 +1049,7 @@ function sendMessageUpdate(room: Room, event: MatrixEvent) {
 }
 
 export function buildMessageForEvent(room: Room, event: MatrixEvent): ApiMessage | undefined {
-  return buildApiMessage(event, room, getChatContext(room));
+  return buildApiMessage(event, room, { ...getChatContext(room), withComments: true });
 }
 
 function sendReactionsUpdate(room: Room, targetEventId: string) {
@@ -950,7 +1059,7 @@ function sendReactionsUpdate(room: Room, targetEventId: string) {
   const reactions = buildReactions(room, target, getChatContext(room)) || { results: [] };
   onUpdate({
     '@type': 'updateMessageReactions',
-    chatId: getChatIdForRoom(room),
+    chatId: getKnownCommentRootId(targetEventId) ? getCommentsChatId(room.roomId) : getChatIdForRoom(room),
     id: messageId,
     reactions,
   });
@@ -971,7 +1080,17 @@ function handleRedaction(event: MatrixEvent, room: Room) {
 
   const messageId = findMessageId(redactedId);
   if (!messageId) return;
-  onUpdate({ '@type': 'deleteMessages', chatId: getChatIdForRoom(room), ids: [messageId] });
+  const commentRootId = getKnownCommentRootId(redactedId);
+  onUpdate({
+    '@type': 'deleteMessages',
+    chatId: commentRootId ? getCommentsChatId(room.roomId) : getChatIdForRoom(room),
+    ids: [messageId],
+  });
+  if (commentRootId) {
+    removeCommentFromSummary(commentRootId, redactedId);
+    const post = room.findEventById(commentRootId);
+    if (post) announceCommentsInfo(room, post);
+  }
 }
 
 function handleReceipt(event: MatrixEvent, room: Room) {

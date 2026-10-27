@@ -28,6 +28,9 @@ import { getEmojiOnlyCountForMessage } from '../../global/helpers/getEmojiOnlyCo
 import { addTimestampEntities } from '../../util/dates/timestamp';
 import { omitUndefined } from '../../util/iteratees';
 import {
+  COMMENT_EVENT, getCommentRootEventId, getCommentsChatId, isCommentEvent, rememberCommentEvent,
+} from './comments';
+import {
   FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR, UNDECRYPTABLE_TEXT,
 } from './constants';
 import { parseHtmlToFormattedText, stripReplyFallback } from './html';
@@ -50,6 +53,8 @@ export type ChatContext = {
   isChannel: boolean;
   myUserId: string;
   resolvePeerId: (userId: string) => string;
+  // Comments under channel posts are left out of the channel's own timeline
+  withComments?: boolean;
 };
 
 export function getServerName(id: string) {
@@ -331,7 +336,7 @@ function buildMessageContent(
     return mediaId ? { photo: buildPhoto(mediaId, content, date) } : { text: { text: content.body || '' } };
   }
 
-  if (type !== EventType.RoomMessage) return undefined;
+  if (type !== EventType.RoomMessage && type !== COMMENT_EVENT) return undefined;
 
   const info = content.info || {};
   const mediaId = getMediaId(content);
@@ -513,7 +518,9 @@ function isCreationSetupEvent(event: MatrixEvent, room?: Room) {
     && event.getContent().membership === 'join';
 }
 
-export function isDisplayableEvent(event: MatrixEvent, context: Pick<ChatContext, 'isPrivate'>, room?: Room) {
+export function isDisplayableEvent(
+  event: MatrixEvent, context: Pick<ChatContext, 'isPrivate' | 'withComments'>, room?: Room,
+) {
   if (event.isRedacted() || event.status) return false;
   if (event.isState() && isCreationSetupEvent(event, room)) return false;
   const type = event.getType();
@@ -525,6 +532,8 @@ export function isDisplayableEvent(event: MatrixEvent, context: Pick<ChatContext
     case EventType.RoomMessageEncrypted:
     case EventType.Sticker:
       return true;
+    case COMMENT_EVENT:
+      return Boolean(context.withComments);
     case EventType.RoomCreate:
     case EventType.RoomName:
     case EventType.RoomAvatar:
@@ -644,17 +653,21 @@ export function buildApiMessage(
   const replyTargetId = !isState ? getReplyTargetEventId(event) : undefined;
   const replyToMsgId = replyTargetId ? findMessageId(replyTargetId) : undefined;
   const replacingEvent = event.replacingEvent();
-  const isOutgoing = sender === context.myUserId && !context.isChannel;
+  // Comments belong to the channel's virtual discussion chat, in the thread of their post
+  const commentRootId = isCommentEvent(event) ? getCommentRootEventId(event) : undefined;
+  if (commentRootId) rememberCommentEvent(eventId, commentRootId);
+  const replyToTopId = commentRootId ? findMessageId(commentRootId) : undefined;
+  const isOutgoing = sender === context.myUserId && (!context.isChannel || Boolean(commentRootId));
   const forwardInfo = !isState ? buildForwardInfo(event.getContent(), context) : undefined;
 
   const message: ApiMessage = omitUndefined<ApiMessage>({
     id,
-    chatId: context.chatId,
+    chatId: commentRootId ? getCommentsChatId(room.roomId) : context.chatId,
     content: omitUndefined(content),
     date: Math.floor(event.getTs() / 1000),
     isOutgoing,
     senderId: context.resolvePeerId(sender),
-    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId } : undefined,
+    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : undefined,
     forwardInfo,
     isEdited: replacingEvent ? true : undefined,
     editDate: replacingEvent ? Math.floor(replacingEvent.getTs() / 1000) : undefined,

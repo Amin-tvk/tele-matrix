@@ -22,6 +22,9 @@ const BADGE_PROFILE_FIELD = 'im.peyvand.badge';
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const REGISTRY_ROOM_VERSION = '11';
 const ADMIN_POWER_LEVEL = 100;
+// Rooms only let a user write state keys starting with "@" when the key is their own ID, so keys get a prefix.
+// The first ticks were stored without it and are still read
+const STATE_KEY_PREFIX = 'id:';
 
 type StateEvent = { type: string; state_key: string; content: { verified?: boolean } };
 
@@ -78,9 +81,17 @@ export async function refreshVerifiedBadges() {
       const events = await getClient().http.authedRequest<StateEvent[]>(
         Method.Get, `/rooms/${encodeURIComponent(roomId)}/state`,
       );
-      ids = new Set(events
-        .filter(({ type, content }) => type === VERIFIED_EVENT && content.verified)
-        .map(({ state_key: stateKey }) => stateKey));
+      // Prefixed keys are newer and win over unprefixed ones for the same ID
+      const isVerifiedById = new Map<string, boolean>();
+      const registryEvents = events.filter(({ type }) => type === VERIFIED_EVENT);
+      [false, true].forEach((isPrefixed) => {
+        registryEvents
+          .filter(({ state_key: key }) => key.startsWith(STATE_KEY_PREFIX) === isPrefixed)
+          .forEach(({ state_key: key, content }) => {
+            isVerifiedById.set(isPrefixed ? key.slice(STATE_KEY_PREFIX.length) : key, Boolean(content.verified));
+          });
+      });
+      ids = new Set([...isVerifiedById].filter(([, isVerified]) => isVerified).map(([id]) => id));
     } catch (err) {
       if (DEBUG) console.warn('[matrix] Reading the verified registry failed', err);
       return;
@@ -152,11 +163,16 @@ export async function setPeerVerified({ peer, matrixId: givenMatrixId, isVerifie
   const client = getClient();
   const roomId = await resolveRegistryRoomId() || await createRegistryRoom();
   const content = isVerified ? { verified: true, by: getMyUserId() } : {};
+  const stateKey = `${STATE_KEY_PREFIX}${matrixId}`;
   try {
-    await client.sendStateEvent(roomId, VERIFIED_EVENT as never, content as never, matrixId);
+    await client.sendStateEvent(roomId, VERIFIED_EVENT as never, content as never, stateKey);
   } catch {
     await joinRegistryAsAdmin(roomId);
-    await client.sendStateEvent(roomId, VERIFIED_EVENT as never, content as never, matrixId);
+    await client.sendStateEvent(roomId, VERIFIED_EVENT as never, content as never, stateKey);
+  }
+  // An admin's own tick may still be stored under the old unprefixed key
+  if (!isVerified && matrixId === getMyUserId()) {
+    await client.sendStateEvent(roomId, VERIFIED_EVENT as never, {} as never, matrixId).catch(() => undefined);
   }
   await refreshVerifiedBadges();
   return true;

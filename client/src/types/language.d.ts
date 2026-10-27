@@ -3372,6 +3372,9 @@ export interface LangPair {
   'PeyvandAdminSearchChannels': undefined;
   'PeyvandAdminChannelsHint': undefined;
   'PeyvandAdminNoChannels': undefined;
+  'PeyvandCommentsToggle': undefined;
+  'PeyvandCommentsDescription': undefined;
+  'PeyvandCommentsEncrypted': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;

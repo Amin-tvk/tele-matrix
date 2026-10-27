@@ -43,6 +43,7 @@ You get Telegram's speed, animations and polish. Users sign up with an invite co
 | 📁 **Chat folders** | Telegram-style folders and filters, synced across devices |
 | ✅ **Checklists** | Shared to-do lists in chats: others can tick items or add tasks |
 | 😍 **Reactions** | Full emoji picker, double-tap quick reaction (choose your own emoji). Your most used reactions come first, on every device |
+| 💬 **Channel comments** | Channel admins turn on comments; subscribers comment under each post, like Telegram's discussion, without a separate group |
 | ☑️ **Blue ticks** | Server admins give verified ticks to people and channels. Verified people can show an emoji of their choice instead |
 | 🔒 **Passcode lock** | Offered after signing in: locks the app on the device, by hand or automatically after 1 minute to 1 hour away |
 | 👀 **Read receipts** | See who read a message in a group, and when |

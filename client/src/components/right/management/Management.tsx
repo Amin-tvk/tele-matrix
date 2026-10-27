@@ -12,6 +12,7 @@ import ManageChannel from './ManageChannel';
 import ManageChatAdministrators from './ManageChatAdministrators';
 import ManageChatPrivacyType from './ManageChatPrivacyType';
 import ManageChatRemovedUsers from './ManageChatRemovedUsers';
+import ManageComments from './ManageComments';
 import ManageDiscussion from './ManageDiscussion';
 import ManageGroup from './ManageGroup';
 import ManageGroupAdminRights from './ManageGroupAdminRights';
@@ -129,6 +130,10 @@ const Management: FC<OwnProps & StateProps> = ({
       );
 
     case ManagementScreens.Discussion:
+      // Channels switch comments on and off instead of linking a discussion group
+      if (managementType === 'channel') {
+        return <ManageComments chatId={chatId} isActive={isActive} onClose={onClose} />;
+      }
       return (
         <ManageDiscussion
           chatId={chatId}

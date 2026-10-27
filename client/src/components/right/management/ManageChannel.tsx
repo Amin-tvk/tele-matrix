@@ -262,8 +262,8 @@ const ManageChannel = ({
             onClick={handleClickDiscussion}
             disabled={!canChangeInfo}
           >
-            <span className="title">{lang('Discussion')}</span>
-            <span className="subtitle">{hasLinkedChat ? lang('DiscussionUnlink') : lang('Add')}</span>
+            <span className="title">{lang('PeyvandCommentsToggle')}</span>
+            <span className="subtitle">{lang(hasLinkedChat ? 'SettingsItemPrivacyOn' : 'SettingsItemPrivacyOff')}</span>
           </ListItem>
           {canInvite && (
             <ListItem

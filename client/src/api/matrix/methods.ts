@@ -55,12 +55,17 @@ import {
   getRoomPowerLevels,
   isDisplayableEvent,
   isMentioningUser,
+  isRoomChannel,
   normalizeReactionKey,
   POWER_LEVEL_ADMIN,
 } from './builders';
 import {
+  announceCommentsChat,
+  announceCommentsInfo,
+  announceCommentThreads,
   announceUser,
   buildChat,
+  buildCommentsChat,
   buildMessageForEvent,
   buildReadState,
   buildUser,
@@ -87,6 +92,9 @@ import {
   setDmRoom,
   waitForSync,
 } from './client';
+import {
+  areCommentsEnabled, COMMENT_EVENT, getThreadSummary, isCommentEvent, isCommentsChatId, setThreadSummary,
+} from './comments';
 import {
   DEVICE_DISPLAY_NAME, FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PUSH_APP_ID, PUSH_GATEWAY_URL, ROUND_VIDEO_KEY,
 } from './constants';
@@ -339,7 +347,8 @@ export async function fetchChats({
     const context = getChatContext(room);
     for (let i = events.length - 1; i >= 0; i--) {
       const message = buildMessageForEvent(room, events[i]);
-      if (message) {
+      // A comment isn't its channel's last message
+      if (message && message.chatId === chat.id) {
         markUndecryptable(events[i]);
         messages.push(message);
         lastMessageByChatId[chat.id] = message.id;
@@ -471,9 +480,16 @@ export async function fetchFullChat(chat: ApiChat) {
   const topic = room.currentState.getStateEvents(EventType.RoomTopic, '')?.getContent()?.topic;
   const { userStatusesById } = buildUsers(room.getJoinedMembers().map(({ userId }) => userId), room);
   const fullChat = buildChat(room);
+  // A channel with comments links to its discussion chat, which links back
+  const isCommentsChat = isCommentsChatId(chat.id);
+  const hasComments = isCommentsChat || (isRoomChannel(room) && areCommentsEnabled(room));
+  const commentsChat = hasComments ? buildCommentsChat(room) : undefined;
+  if (commentsChat) announceCommentsChat(room);
+  const linkedChatId = isCommentsChat ? fullChat.id : commentsChat?.id;
 
   return {
     fullInfo: {
+      linkedChatId,
       about: topic,
       members,
       adminMembersById,
@@ -483,7 +499,7 @@ export async function fetchFullChat(chat: ApiChat) {
       onlineCount: Object.values(userStatusesById).filter(({ type }) => type === 'userStatusOnline').length,
       isPreHistoryHidden: false,
     },
-    chats: [fullChat],
+    chats: commentsChat && !isCommentsChat ? [fullChat, commentsChat] : [fullChat],
     userStatusesById,
     groupCall: undefined,
     membersCount: room.getJoinedMemberCount(),
@@ -945,7 +961,7 @@ async function buildMessagesFromEvents(room: Room, events: MatrixEvent[]) {
 }
 
 export async function fetchMessages({
-  chat, offsetId, addOffset = 0, limit,
+  chat, threadId, offsetId, addOffset = 0, limit,
 }: {
   chat: ApiChat;
   threadId?: ThreadId;
@@ -955,6 +971,11 @@ export async function fetchMessages({
   limit: number;
 }) {
   await waitForSync();
+  if (isCommentsChatId(chat.id)) {
+    return fetchComments({
+      chat, threadId, offsetId, addOffset, limit,
+    });
+  }
   const room = requireRoom(chat);
   if (!room) {
     return {
@@ -972,9 +993,12 @@ export async function fetchMessages({
     newerCount: newerCount + 1,
   });
   const { messages, usedEvents } = await buildMessagesFromEvents(room, events);
+  // Comments under channel posts belong to the channel's discussion chat
+  const chatMessages = messages.filter(({ chatId }) => chatId === chat.id);
+  announceCommentThreads(room, chatMessages);
 
   // Telegram semantics: messages sorted newest first, starting after `offsetId` shifted by `addOffset`
-  const sorted = messages.sort((a, b) => b.id - a.id);
+  const sorted = chatMessages.sort((a, b) => b.id - a.id);
   let position = 0;
   if (offsetId) {
     position = sorted.findIndex(({ id }) => id < offsetId);
@@ -998,6 +1022,136 @@ export async function fetchMessages({
     count: isStartReached ? slice.length : undefined,
     topics: [],
   };
+}
+
+/* Comments under channel posts */
+
+const COMMENTS_PAGE_SIZE = 100;
+const MAX_COMMENTS = 2000;
+
+async function loadComments(room: Room, postEventId: string) {
+  const client = getClient();
+  const events: MatrixEvent[] = [];
+  let from: string | undefined;
+  do {
+    const result = await client.relations(room.roomId, postEventId, RelationType.Thread, COMMENT_EVENT, {
+      dir: Direction.Backward, limit: COMMENTS_PAGE_SIZE, from,
+    });
+    events.push(...result.events.filter(isCommentEvent));
+    from = result.nextBatch || undefined;
+  } while (from && events.length < MAX_COMMENTS);
+  return events;
+}
+
+async function fetchComments({
+  chat, threadId, offsetId, addOffset = 0, limit,
+}: {
+  chat: ApiChat; threadId?: ThreadId; offsetId?: number; addOffset?: number; limit: number;
+}) {
+  const room = requireRoom(chat);
+  const postEventId = room && threadId ? getEventIdForMessage(room, Number(threadId)) : undefined;
+  if (!room || !postEventId) {
+    return {
+      messages: [], users: [], chats: [], count: 0, topics: [],
+    };
+  }
+
+  const events = await loadComments(room, postEventId);
+  setThreadSummary(postEventId, events);
+  const post = room.findEventById(postEventId);
+  if (post) announceCommentsInfo(room, post);
+
+  const { messages, usedEvents } = await buildMessagesFromEvents(room, events);
+  const sorted = messages.sort((a, b) => b.id - a.id);
+  let position = 0;
+  if (offsetId) {
+    position = sorted.findIndex(({ id }) => id < offsetId);
+    if (position === -1) position = sorted.length;
+  }
+  const start = Math.max(0, position + addOffset);
+  const slice = sorted.slice(start, start + limit);
+  const { users } = buildUsers(collectUserIds(usedEvents), room);
+
+  return {
+    messages: slice,
+    users,
+    chats: [],
+    count: sorted.length,
+    topics: [],
+  };
+}
+
+// Opening a post's comments: the post on top, shown in the channel's discussion chat
+export async function fetchDiscussionMessage({ chat, messageId }: { chat: ApiChat; messageId: number }) {
+  await waitForSync();
+  const room = requireRoom(chat);
+  const postEventId = room ? getEventIdForMessage(room, messageId) : undefined;
+  if (!room || !postEventId || !areCommentsEnabled(room)) return undefined;
+
+  const [post] = await fetchEventsByIds(room, [postEventId]);
+  const postMessage = post ? buildMessageForEvent(room, post) : undefined;
+  if (!post || !postMessage) return undefined;
+
+  const comments = await loadComments(room, postEventId);
+  setThreadSummary(postEventId, comments);
+  // The oldest comment marks where the thread's history starts
+  const oldest = comments.reduce<MatrixEvent | undefined>((result, event) => (
+    !result || event.getTs() < result.getTs() ? event : result
+  ), undefined);
+  const firstMessageId = oldest ? getMessageId(room.roomId, oldest.getId()!, oldest.getTs()) : messageId;
+
+  const commentsChatId = announceCommentsChat(room);
+  const topMessage: ApiMessage = { ...postMessage, chatId: commentsChatId };
+  const { count, recentSenders } = getThreadSummary(post);
+  const threadInfo: ApiThreadInfo = {
+    isCommentsInfo: false,
+    chatId: commentsChatId,
+    threadId: messageId,
+    fromChannelId: chat.id,
+    fromMessageId: messageId,
+    messagesCount: count,
+    recentReplierIds: recentSenders.map((userId) => getPeerIdByUserId(userId)),
+  };
+
+  return {
+    messages: [topMessage],
+    topMessages: [topMessage],
+    threadId: messageId,
+    threadReadState: { unreadCount: 0 },
+    threadInfo,
+    lastMessageId: undefined,
+    chatId: commentsChatId,
+    firstMessageId,
+  };
+}
+
+// Comments are switched by letting subscribers send the comment event type
+export async function setChannelComments({ chat, isEnabled }: { chat: ApiChat; isEnabled: boolean }) {
+  const room = requireRoom(chat);
+  if (!room) return false;
+  const client = getClient();
+  // In an encrypted room every event is sent as the same encrypted type, so posting can't be told from commenting
+  if (isEnabled && client.isRoomEncrypted(room.roomId)) return 'encrypted' as const;
+
+  const content = { ...(room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent() || {}) };
+  const events: Record<string, number> = { ...(content.events || {}) };
+  if (isEnabled) {
+    events[COMMENT_EVENT] = 0;
+    // Subscribers react to comments and delete their own
+    events[EventType.Reaction] ??= 0;
+    events[EventType.RoomRedaction] ??= 0;
+  } else {
+    events[COMMENT_EVENT] = POWER_LEVEL_ADMIN;
+  }
+  await client.sendStateEvent(room.roomId, EventType.RoomPowerLevels, { ...content, events } as never, '');
+
+  const commentsChatId = announceCommentsChat(room);
+  onUpdate({
+    '@type': 'updateChatFullInfo',
+    id: chat.id,
+    fullInfo: { linkedChatId: isEnabled ? commentsChatId : undefined },
+  });
+  return true;
 }
 
 async function fetchEventsByIds(room: Room, eventIds: string[]) {
@@ -1217,6 +1371,7 @@ export function sendMessageLocal(params: SendMessageParams) {
   const media = attachment ? buildUploadingMedia(attachment) : undefined;
   const formattedText = text ? addTimestampEntities({ text, entities, emojiOnlyCount: undefined }) : undefined;
   const replyToMsgId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
+  const replyToTopId = replyInfo?.type === 'message' ? replyInfo.replyToTopId : undefined;
 
   const message: ApiMessage = omitUndefined<ApiMessage>({
     id: getNextLocalMessageId(lastMessageId || Date.now()),
@@ -1231,7 +1386,7 @@ export function sendMessageLocal(params: SendMessageParams) {
     date: getServerTime(),
     isOutgoing: chat.type !== 'chatTypeChannel',
     senderId: getMyPeerId(),
-    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId } : undefined,
+    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : undefined,
     groupedId,
     isInAlbum: groupedId && media && (media.photo || media.video) ? true : undefined,
     isForwardingAllowed: true,
@@ -1419,7 +1574,12 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
 
     const replyToMsgId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
     const replyEventId = replyToMsgId ? getEventIdForMessage(room, replyToMsgId) : undefined;
-    if (replyEventId) {
+    const isComment = isCommentsChatId(chat.id);
+    // Commenting on a post doesn't notify its author; replying to another comment does
+    const isCommentOnPost = isComment && replyToMsgId === (
+      (replyInfo?.type === 'message' && replyInfo.replyToTopId) || replyToMsgId
+    );
+    if (replyEventId && !isCommentOnPost) {
       content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyEventId } };
       // Like in Telegram, the author of the replied message gets notified
       const replySender = room.findEventById(replyEventId)?.getSender();
@@ -1429,8 +1589,21 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
       }
     }
 
-    const { eventId } = await sendRoomEvent(room, EventType.RoomMessage, content);
-    const event = buildSentEvent(room, eventId, EventType.RoomMessage, content);
+    // A comment is a thread reply to its post, and a reply to another comment when quoting one
+    if (isComment) {
+      const replyToTopId = replyInfo?.type === 'message' ? replyInfo.replyToTopId : undefined;
+      const postEventId = getEventIdForMessage(room, replyToTopId || replyToMsgId!);
+      content['m.relates_to'] = {
+        rel_type: RelationType.Thread,
+        event_id: postEventId,
+        is_falling_back: !replyEventId || replyEventId === postEventId,
+        'm.in_reply_to': { event_id: replyEventId || postEventId },
+      };
+    }
+    const eventType = isComment ? COMMENT_EVENT : EventType.RoomMessage;
+
+    const { eventId } = await sendRoomEvent(room, eventType, content);
+    const event = buildSentEvent(room, eventId, eventType, content);
     getMessageId(room.roomId, eventId, event.getTs());
     const message = buildMessageForEvent(room, event);
     if (!message) throw new Error('Failed to build sent message');
@@ -1488,7 +1661,8 @@ export async function editMessage({
     },
   });
 
-  await sendRoomEvent(room, EventType.RoomMessage, {
+  // An edit has the type of the message it replaces
+  await sendRoomEvent(room, isCommentsChatId(chat.id) ? COMMENT_EVENT : EventType.RoomMessage, {
     ...newContent,
     body: `* ${newText.body}`,
     formatted_body: newText.formatted_body ? `* ${newText.formatted_body}` : undefined,

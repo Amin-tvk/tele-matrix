@@ -4575,3 +4575,6 @@
 "PeyvandAdminSearchChannels" = "Search channels";
 "PeyvandAdminChannelsHint" = "Channels on this server, largest first. A blue tick shows next to the channel's name for everyone.";
 "PeyvandAdminNoChannels" = "No channels found";
+"PeyvandCommentsToggle" = "Comments";
+"PeyvandCommentsDescription" = "Subscribers can comment under each post. Comments are shown under the post with a comment button; only admins can still post to the channel.";
+"PeyvandCommentsEncrypted" = "Comments can't be turned on in an encrypted channel.";
