@@ -165,7 +165,6 @@ services:
       BOT_PASSWORD: ${STICKER_BOT_PASSWORD:-}
       TELEGRAM_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_PROXY: ${TELEGRAM_PROXY:-}
-      ADMIN_USERS: ${STICKER_ADMINS:-}
       STATE_DIR: /data
     volumes:
       - ./data/sticker-bot:/data

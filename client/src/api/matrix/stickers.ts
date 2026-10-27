@@ -19,7 +19,6 @@ const FAVORITE_LIMIT = 5 * RECENT_LIMIT;
 type StickerRef = { image: PackImage; pack?: string };
 type StickerSettings = {
   added?: string[];
-  removed?: string[];
   recent?: StickerRef[];
   favorite?: StickerRef[];
 };
@@ -39,11 +38,10 @@ async function writeSettings(update: Partial<StickerSettings>) {
   await getClient().setAccountData(STICKERS_ACCOUNT_DATA as never, { ...readSettings(), ...update } as never);
 }
 
+// A pack is in someone's panel only once they add it themselves
 function isInstalled(pack: StoredPack, settings: StickerSettings) {
   const name = pack.shortName.toLowerCase();
-  if (settings.removed?.some((removed) => removed.toLowerCase() === name)) return false;
-  return Boolean(pack.content.pack?.['im.peyvand.default'])
-    || Boolean(settings.added?.some((added) => added.toLowerCase() === name));
+  return Boolean(settings.added?.some((added) => added.toLowerCase() === name));
 }
 
 function getInstalledDate(pack: StoredPack) {
@@ -77,7 +75,7 @@ async function loadRegistry() {
     .map(({ state_key: shortName, content }) => ({ shortName, content })));
 }
 
-// Packs that became available or went away since the last look reach the UI as set updates
+// Packs added or removed on another device, or taken out of the registry, reach the UI as set updates
 function announceInstalledChanges() {
   const settings = readSettings();
   const installed = new Set(getPacks().filter((pack) => isInstalled(pack, settings)).map((pack) => pack.shortName));
@@ -185,10 +183,7 @@ async function setInstalled(stickerSetId: string, isOn: boolean) {
   const settings = readSettings();
   const name = pack.shortName.toLowerCase();
   const added = (settings.added || []).filter((item) => item.toLowerCase() !== name);
-  const removed = (settings.removed || []).filter((item) => item.toLowerCase() !== name);
-  await writeSettings(isOn
-    ? { added: [...added, pack.shortName], removed }
-    : { added, removed: [...removed, pack.shortName] });
+  await writeSettings({ added: isOn ? [...added, pack.shortName] : added });
   if (isOn) installedShortNames.add(pack.shortName);
   else installedShortNames.delete(pack.shortName);
   onUpdate({
@@ -263,4 +258,40 @@ export function fetchStickersForEmoji({ emoji }: { emoji: string; hash?: string 
       .filter(([, image]) => image.body && image.body.replace(/️/g, '').includes(normalized))
       .map(([, image]) => buildApiSticker(image, pack.shortName)));
   return Promise.resolve({ stickers, hash: buildHash(stickers.map(({ id }) => id)) });
+}
+
+// Searching by name finds every pack on the server, including ones not added yet, so people can find and add them
+export async function searchStickers({ query }: { query: string; hash?: string }) {
+  if (!getPacks().length) await refreshRegistry();
+  const settings = readSettings();
+  const needle = query.trim().toLowerCase();
+  const sets = getPacks()
+    .filter((pack) => pack.shortName.toLowerCase().includes(needle)
+      || (pack.content.pack?.display_name || '').toLowerCase().includes(needle))
+    .map((pack) => {
+      const set = buildApiStickerSet(pack, isInstalled(pack, settings) ? getInstalledDate(pack) : undefined);
+      const covers = getPackImages(pack).slice(0, 5).map(([, image]) => buildApiSticker(image, pack.shortName));
+      return { ...set, covers };
+    });
+  return { hash: buildHash(sets.map(({ id }) => id)), sets };
+}
+
+export async function searchStickersGlobal(
+  { query, emoticon }: { query: string; emoticon?: string; langCode: string },
+) {
+  const { stickers } = await fetchStickersForEmoji({ emoji: emoticon || query });
+  return { stickers, nextOffset: undefined };
+}
+
+export function fetchFeaturedStickers() {
+  return Promise.resolve({ hash: '0', isPremium: false, sets: [] });
+}
+
+// GIFs have no shared library on Matrix: the GIF tab answers right away instead of waiting for Telegram's
+export function fetchSavedGifs() {
+  return Promise.resolve({ hash: '0', gifs: [] });
+}
+
+export function searchGifs() {
+  return Promise.resolve({ gifs: [], nextOffset: undefined });
 }

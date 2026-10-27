@@ -5,7 +5,7 @@ import { encodeMxc } from './ids';
 
 // Sticker packs in the Matrix image pack format (MSC2545, also read by Cinny and FluffyChat). The packs everyone
 // can use live in one registry room, one `im.ponies.room_emotes` state event per pack keyed by its short name;
-// the sticker bot fills it. Packs the server admins add are on for everyone until a person removes them
+// the sticker bot fills it. Each person adds the packs they want from a pack's link
 
 export const STICKER_REGISTRY_LOCALPART = 'peyvand-stickers';
 export const PACK_EVENT = 'im.ponies.room_emotes';
@@ -35,7 +35,6 @@ export type PackContent = {
     display_name?: string;
     avatar_url?: string;
     usage?: string[];
-    'im.peyvand.default'?: boolean;
     'im.peyvand.added_ts'?: number;
   };
   images?: Record<string, PackImage>;

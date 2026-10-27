@@ -2,8 +2,8 @@
 
 People send it a Telegram sticker pack link (t.me/addstickers/NAME). It downloads the pack through the Telegram
 Bot API, uploads the files to this homeserver and publishes the pack in the sticker registry room
-(#peyvand-stickers), in the Matrix image pack format (MSC2545). Tele reads that room: packs the server admins add
-are on for everyone, others are added by tapping the link the bot replies with.
+(#peyvand-stickers), in the Matrix image pack format (MSC2545). Tele reads that room. A pack never appears in
+anyone's stickers by itself: each person adds it by tapping the link the bot replies with.
 
 Telegram may be filtered where the server runs, so Telegram requests can go through a proxy (TELEGRAM_PROXY,
 for example socks5h://127.0.0.1:10808 from an xray client). Matrix requests always go straight to Synapse.
@@ -14,7 +14,6 @@ Settings come from the environment:
     BOT_USER, BOT_PASSWORD   the bot account's name and password; the bot signs in once and keeps the token
     TELEGRAM_TOKEN     token of a Telegram bot made with @BotFather (only used to read public sticker packs)
     TELEGRAM_PROXY     optional proxy URL for Telegram
-    ADMIN_USERS        comma separated Matrix IDs whose packs are turned on for everyone
     STATE_DIR          where the sync position is kept (default /data)
 """
 
@@ -37,7 +36,6 @@ BOT_USER = os.environ.get("BOT_USER", "stickers").strip()
 BOT_PASSWORD = os.environ.get("BOT_PASSWORD", "").strip()
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 TELEGRAM_PROXY = os.environ.get("TELEGRAM_PROXY", "").strip()
-ADMIN_USERS = {user.strip() for user in os.environ.get("ADMIN_USERS", "").split(",") if user.strip()}
 STATE_DIR = os.environ.get("STATE_DIR", "/data")
 
 REGISTRY_LOCALPART = "peyvand-stickers"
@@ -271,35 +269,21 @@ class Bot:
         return name, content
 
     def handle_request(self, room_id: str, sender: str, short_name: str):
-        is_admin = sender in ADMIN_USERS
         existing = self.get_pack(short_name)
         if existing:
-            name, content = existing
-            if is_admin and not content["pack"].get("im.peyvand.default"):
-                content["pack"]["im.peyvand.default"] = True
-                self.put_pack(name, content)
-                self.reply_added(room_id, name, content, is_admin, is_new=False)
-                return
-            self.reply_added(room_id, name, content, is_admin and content["pack"].get("im.peyvand.default"),
-                             is_new=False)
+            self.reply_ready(room_id, *existing)
             return
-
         name, content = self.import_pack(short_name, lambda text: self.send_text(room_id, text))
-        content["pack"]["im.peyvand.default"] = is_admin
         content["pack"]["im.peyvand.added_by"] = sender
         self.put_pack(name, content)
         log.info("Added pack %s (%d stickers)", name, len(content["images"]))
-        self.reply_added(room_id, name, content, is_admin, is_new=True)
+        self.reply_ready(room_id, name, content)
 
-    def reply_added(self, room_id: str, name: str, content: dict, is_for_everyone: bool, is_new: bool):
+    def reply_ready(self, room_id: str, name: str, content: dict):
         title = content["pack"].get("display_name", name)
-        link = f"https://t.me/addstickers/{name}"
         count = len(content["images"])
-        if is_for_everyone:
-            text = f"“{title}” ({count} stickers) is {'now ' if is_new else ''}in everyone's stickers. {link}"
-        else:
-            text = f"“{title}” ({count} stickers) is ready. Tap the link to add it to your stickers: {link}"
-        self.send_text(room_id, text)
+        link = f"https://t.me/addstickers/{name}"
+        self.send_text(room_id, f"“{title}” ({count} stickers) is ready. Tap the link to add it to your stickers: {link}")
 
     # Events
 

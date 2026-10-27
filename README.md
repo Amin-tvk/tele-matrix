@@ -283,7 +283,7 @@ Then run `docker compose restart synapse`.
 ### Sticker packs
 
 Tele has a sticker panel. An optional bot (`@stickers`) brings Telegram sticker packs to your server from a
-`t.me/addstickers/...` link; packs the server admins add show up for everyone. Setup, including a proxy for
+`t.me/addstickers/...` link; each person adds the packs they want from the link it replies with. Setup, including a proxy for
 servers where Telegram is filtered: [docs/stickers.md](docs/stickers.md).
 
 ### Last-seen privacy module

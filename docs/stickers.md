@@ -4,11 +4,10 @@ Tele has a sticker panel like Telegram's. Packs are stored the standard Matrix w
 Cinny and FluffyChat read too) in one registry room, `#peyvand-stickers:<MATRIX_DOMAIN>`. Only the sticker bot
 can change that room; anyone on the server can read it.
 
-- Packs a **server admin** asks for are turned on for everyone.
-- Packs anyone else asks for are ready to add: the bot replies with the pack's link, and tapping it in Tele opens
-  the pack with an **Add** button.
-- Anyone can remove a pack from their own panel in the pack window; recent and favorite stickers follow the
-  account to every device.
+- No pack is ever added to anyone's panel by itself, not even ones a server admin asks for. The bot replies with
+  the pack's link; tapping it in Tele opens the pack with an **Add** button, and anyone who has the link can add it.
+- Anyone can remove a pack from their own panel in the pack window. Added packs, recent and favorite stickers
+  follow the account to every device.
 
 Static (`.webp`), animated (`.tgs`) and video (`.webm`) stickers all work in Tele. Other Matrix apps show static
 stickers; most can't play the animated ones.
@@ -33,7 +32,6 @@ The chat must be unencrypted (Tele's default for new chats); the bot can't read 
    ```env
    STICKER_BOT_PASSWORD=the password from step 2
    TELEGRAM_BOT_TOKEN=the token from step 1
-   STICKER_ADMINS=@you:matrix.example.com
    ```
 
 4. **Telegram filtered on the server?** Put an xray client config at `data/xray/config.json` (start from
