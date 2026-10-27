@@ -204,6 +204,7 @@ With a CDN in front, set its SSL mode to *Full* and don't cache `/_matrix/*` or 
 | `APP_TITLE` | `Peyvand` | App name in the browser tab and when installed. Rebuild after changing: `docker compose build web` |
 | `PUSH_APP_ID` | `com.example.peyvand.web` | Web Push app ID. Set it before the first start |
 | `PUBLIC_IP` | | Public IPv4 of the server, for the call relay. Needed when `MATRIX_DOMAIN` is behind a CDN or proxy |
+| `PUSH_PROXY` | | HTTP proxy for sending notifications, for servers whose IP Google's push service refuses (e.g. in Iran) |
 | `CINNY_DOMAIN` | | Domain for the optional Cinny client |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Ports Caddy listens on |
 | `CADDY_GLOBAL_OPTIONS` | | Extra Caddy options, e.g. `local_certs` for a local test without public DNS |
@@ -383,6 +384,12 @@ Synapse allows requests from any origin by default, so the dev server can talk t
 Screenshots are saved to `tests/e2e/out/`.
 
 ## 🩺 Troubleshooting
+
+<details>
+<summary><b>No notifications in Chrome while the app is closed</b></summary>
+
+Chrome delivers notifications through Google, which refuses requests from some countries' IPs, Iran among them. `docker compose logs sygnal` then shows `responded with 403`. Set `PUSH_PROXY` in `.env` to an HTTP proxy outside that country and run `docker compose up -d`. Firefox uses Mozilla's push service and isn't affected.
+</details>
 
 <details>
 <summary><b>Calls ring but never connect</b></summary>

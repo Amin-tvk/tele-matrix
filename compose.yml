@@ -68,6 +68,8 @@ services:
     restart: unless-stopped
     environment:
       SYGNAL_CONF: /data/sygnal.yaml
+      # Push services that block this server's country are reached through this proxy
+      HTTPS_PROXY: ${PUSH_PROXY:-}
     volumes:
       - ./data/sygnal:/data:ro
     depends_on:
