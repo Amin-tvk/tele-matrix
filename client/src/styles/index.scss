@@ -12,8 +12,8 @@
 
 html,
 body {
-  --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
-  Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --font-family: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen,
+  Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   --font-family-monospace: "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", 'SF Mono', "Menlo", "Ubuntu Mono",
   "Consolas", monospace;
   --font-family-numbers-rounded: ui-rounded, "Numbers Rounded", "Roboto", "Helvetica Neue", sans-serif;
@@ -72,21 +72,9 @@ html.theme-dark {
 body.is-ios,
 body.is-macos {
   --font-family-rounded: ui-rounded, "Nunito", "Roboto", "Helvetica Neue", sans-serif;
-  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Roboto", "Apple Color Emoji", "Helvetica Neue",
-  sans-serif;
+  --font-family: "Vazirmatn", system-ui, -apple-system, BlinkMacSystemFont, "Roboto", "Apple Color Emoji",
+  "Helvetica Neue", sans-serif;
   --font-weight-semibold: 600;
-}
-
-html[lang="fa"],
-html[lang="fa"] body {
-  --font-family: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen,
-  Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-
-  &.is-ios,
-  &.is-macos {
-    --font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Roboto", "Apple Color Emoji", "Segoe UI", Oxygen,
-    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-  }
 }
 
 body.is-ios {

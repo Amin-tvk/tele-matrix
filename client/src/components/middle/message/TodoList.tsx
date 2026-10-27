@@ -1,13 +1,14 @@
 import {
   memo, useLayoutEffect, useMemo, useState,
 } from '../../../lib/teact/teact';
-import { getActions, getGlobal, withGlobal } from '../../../global';
+import { getActions, withGlobal } from '../../../global';
 
 import type {
   ApiMediaTodo,
   ApiMessage,
   ApiPeer,
 } from '../../../api/types';
+import type { GlobalState } from '../../../global/types';
 
 import { getPeerFullTitle, getPeerTitle } from '../../../global/helpers/peers';
 import { selectIsCurrentUserPremium, selectPeer, selectSender } from '../../../global/selectors';
@@ -30,6 +31,7 @@ type OwnProps = {
 
 type StateProps = {
   sender?: ApiPeer;
+  completedByPeers?: Record<string, ApiPeer>;
   isCurrentUserPremium: boolean;
   isSynced?: boolean;
 };
@@ -38,6 +40,7 @@ const TodoList = ({
   message,
   todoList,
   sender,
+  completedByPeers,
   isCurrentUserPremium,
   isSynced,
 }: OwnProps & StateProps) => {
@@ -93,7 +96,7 @@ const TodoList = ({
 
   const tasks = useMemo(() => items.map((task) => {
     const completedBy = completions?.find((c) => c.itemId === task.id)?.completedBy;
-    const peer = !othersCanComplete || !completedBy ? undefined : selectPeer(getGlobal(), completedBy);
+    const peer = !othersCanComplete || !completedBy ? undefined : completedByPeers?.[completedBy];
     const subLabel = peer ? getPeerFullTitle(lang, peer) : undefined;
     return {
       label: renderTextWithEntities(task.title),
@@ -101,7 +104,7 @@ const TodoList = ({
       peer,
       subLabel,
     };
-  }), [items, othersCanComplete, completions, lang]);
+  }), [items, othersCanComplete, completions, completedByPeers, lang]);
 
   const renderCheckBoxGroup = () => {
     return (
@@ -190,10 +193,30 @@ const TodoList = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>((global, { message }): Complete<StateProps> => {
+// Kept between renders while the peers stay the same, so the list doesn't re-render on every global change
+const completedByPeersCache = new Map<string, Record<string, ApiPeer>>();
+
+function selectCompletedByPeers(global: GlobalState, message: ApiMessage, todoList: ApiMediaTodo) {
+  const key = `${message.chatId}-${message.id}`;
+  const peers: Record<string, ApiPeer> = {};
+  todoList.completions?.forEach(({ completedBy }) => {
+    const peer = completedBy ? selectPeer(global, completedBy) : undefined;
+    if (peer) peers[completedBy] = peer;
+  });
+  const cached = completedByPeersCache.get(key);
+  const ids = Object.keys(peers);
+  if (cached && Object.keys(cached).length === ids.length && ids.every((id) => cached[id] === peers[id])) {
+    return cached;
+  }
+  completedByPeersCache.set(key, peers);
+  return peers;
+}
+
+export default memo(withGlobal<OwnProps>((global, { message, todoList }): Complete<StateProps> => {
   const sender = selectSender(global, message);
   return {
     sender,
+    completedByPeers: selectCompletedByPeers(global, message, todoList),
     isCurrentUserPremium: selectIsCurrentUserPremium(global),
     isSynced: global.isSynced,
   };

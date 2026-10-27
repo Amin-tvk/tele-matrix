@@ -24,6 +24,13 @@ type TodoUpdateContent = {
   append?: ApiTodoItem[];
 };
 
+// People who tick items may never have written in the room; their profiles are sent before the list shows them
+let completerHandler: ((userId: string, room: Room) => void) | undefined;
+
+export function setTodoCompleterHandler(handler: (userId: string, room: Room) => void) {
+  completerHandler = handler;
+}
+
 function isFormattedText(value: unknown): value is ApiFormattedText {
   return Boolean(value) && typeof (value as ApiFormattedText).text === 'string';
 }
@@ -86,6 +93,7 @@ export function buildTodoMedia(
 
     if (!isAuthor && !othersCanComplete) return;
     if (Array.isArray(completed)) {
+      completerHandler?.(sender, room);
       completed.forEach((itemId) => {
         completions.set(itemId, {
           itemId,

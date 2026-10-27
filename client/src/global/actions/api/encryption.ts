@@ -42,7 +42,7 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
   if (status.isDeviceBroken) {
     lastPromptAt = Date.now();
     global = getGlobal();
-    if (!selectTabState(global).encryptionRecoveryModal) {
+    if (!selectTabState(global, getCurrentTabId()).encryptionRecoveryModal) {
       actions.openEncryptionRecoveryModal({ tabId: getCurrentTabId() });
     }
     return;

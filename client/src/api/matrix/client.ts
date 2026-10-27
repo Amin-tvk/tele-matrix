@@ -53,7 +53,7 @@ import { buildSessionData, setSession } from './session';
 import {
   clearStore, getValue, loadStore, setStoreName, setValue,
 } from './store';
-import { TODO_UPDATE_EVENT } from './todo';
+import { setTodoCompleterHandler, TODO_UPDATE_EVENT } from './todo';
 
 let client: MatrixClient | undefined;
 let myUserId = '';
@@ -556,6 +556,8 @@ export function announceUser(userId: string, room?: Room) {
   const status = buildUserStatus(userId);
   if (status) onUpdate({ '@type': 'updateUserStatus', userId: user.id, status });
 }
+
+setTodoCompleterHandler(announceUser);
 
 export function markUsersAnnounced(userIds: string[]) {
   userIds.forEach((userId) => announcedUserIds.add(userId));
