@@ -7,10 +7,11 @@ import type * as directory from './directory';
 import type * as folders from './folders';
 import type * as lastSeen from './lastSeen';
 import type * as methods from './methods';
+import type * as stickers from './stickers';
 import type * as stories from './stories';
 
 type Implementations = typeof methods & typeof auth & typeof directory & typeof folders & typeof lastSeen
-  & typeof stories;
+  & typeof stories & typeof stickers;
 // Results differ in optional fields or are raw request results; callers only check that the call succeeded
 type TruthyResultMethods = 'deleteChatMember' | 'leaveChannel' | 'deleteChatUser' | 'deleteChat' | 'deleteChannel'
   | 'editChatPhoto' | 'toggleChatArchived' | 'updateChatAdmin' | 'updateProfile' | 'sendReaction' | 'addChatMembers'

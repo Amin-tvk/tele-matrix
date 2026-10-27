@@ -31,11 +31,13 @@ import type {
   ApiReaction,
   ApiSendMessageAction,
   ApiSession,
+  ApiSticker,
   ApiThreadInfo,
   ApiTodoItem,
   ApiUser,
   ApiUserStatus,
 } from '../types';
+import type { PackImage } from './stickersState';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../types';
 
 import { MUTE_INDEFINITE_TIMESTAMP } from '../../config';
@@ -97,6 +99,7 @@ import {
 } from './comments';
 import {
   DEVICE_DISPLAY_NAME, FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PUSH_APP_ID, PUSH_GATEWAY_URL, ROUND_VIDEO_KEY,
+  THUMBNAIL_SEPARATOR,
 } from './constants';
 import { findRoomByAddress, searchPublicRooms, withTimeout } from './directory';
 import { buildHtmlFromFormattedText } from './html';
@@ -114,6 +117,10 @@ import {
 import { uploadContent, uploadFile } from './media';
 import { recordReactionUsage } from './reactionUsage';
 import { retryOnNetworkError } from './retry';
+import { addRecentSticker } from './stickers';
+import {
+  findPackImage, getShortNameBySetId, LOTTIE_MIME, PACK_KEY, STICKER_MARKER, VIDEO_STICKER_MIME,
+} from './stickersState';
 import { buildTodoContent, buildTodoUpdateContent, TODO_UPDATE_EVENT } from './todo';
 
 const WINDOW_PAGE_SIZE = 50;
@@ -1150,7 +1157,7 @@ export async function setChannelComments({ chat, isEnabled }: { chat: ApiChat; i
   } else {
     events[COMMENT_EVENT] = POWER_LEVEL_ADMIN;
   }
-  await client.sendStateEvent(room.roomId, EventType.RoomPowerLevels, { ...content, events } as never, '');
+  await client.sendStateEvent(room.roomId, EventType.RoomPowerLevels, { ...content, events }, '');
 
   const commentsChatId = announceCommentsChat(room);
   onUpdate({
@@ -1545,6 +1552,33 @@ function buildSentEvent(room: Room, eventId: string, type: string, content: Reco
   });
 }
 
+// A sticker from a pack goes with the pack's details; one seen only in a message is rebuilt from what the UI has
+function buildStickerContent(sticker: ApiSticker): Record<string, unknown> {
+  const found = findPackImage(sticker.id);
+  if (found) {
+    return {
+      body: found.image.body || sticker.emoji || 'Sticker',
+      url: found.image.url,
+      info: found.image.info || {},
+      [PACK_KEY]: found.shortName,
+    };
+  }
+  const [mediaId, thumbnailId] = sticker.id.split(THUMBNAIL_SEPARATOR);
+  const pack = 'shortName' in sticker.stickerSetInfo ? sticker.stickerSetInfo.shortName
+    : 'id' in sticker.stickerSetInfo ? getShortNameBySetId(sticker.stickerSetInfo.id) : undefined;
+  return omitUndefined({
+    body: sticker.emoji || 'Sticker',
+    url: decodeMxc(mediaId),
+    info: omitUndefined({
+      w: sticker.width,
+      h: sticker.height,
+      mimetype: sticker.isLottie ? LOTTIE_MIME : sticker.isVideo ? VIDEO_STICKER_MIME : 'image/webp',
+      thumbnail_url: thumbnailId ? decodeMxc(thumbnailId) : undefined,
+    }),
+    [PACK_KEY]: pack,
+  });
+}
+
 export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnProgress) {
   const { chat } = params;
   if (!chat) return undefined;
@@ -1571,7 +1605,9 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
           'm.mentions': textContent['m.mentions'],
         };
       }
-    } else if (params.sticker || params.gif) {
+    } else if (params.sticker) {
+      content = buildStickerContent(params.sticker);
+    } else if (params.gif) {
       return undefined;
     } else if (params.todo) {
       content = buildTodoContent(params.todo);
@@ -1607,9 +1643,17 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
         'm.in_reply_to': { event_id: replyEventId || postEventId },
       };
     }
-    const eventType = isComment ? COMMENT_EVENT : EventType.RoomMessage;
+    // Comments are one event type, so a sticker there goes as an image marked as a sticker
+    if (params.sticker && isComment) {
+      content = { ...content, msgtype: MsgType.Image, [STICKER_MARKER]: true };
+    }
+    const eventType = isComment ? COMMENT_EVENT : params.sticker ? EventType.Sticker : EventType.RoomMessage;
 
     const { eventId } = await sendRoomEvent(room, eventType, content);
+    if (params.sticker) {
+      void addRecentSticker(content as PackImage, content[PACK_KEY] as string | undefined)
+        .then(() => onUpdate({ '@type': 'updateRecentStickers' }));
+    }
     const event = buildSentEvent(room, eventId, eventType, content);
     getMessageId(room.roomId, eventId, event.getTs());
     const message = buildMessageForEvent(room, event);

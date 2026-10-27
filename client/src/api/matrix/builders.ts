@@ -12,6 +12,7 @@ import type {
   ApiDocument,
   ApiFormattedText,
   ApiMessage,
+  ApiMessageEntity,
   ApiMessageForwardInfo,
   ApiPeerReaction,
   ApiPhoto,
@@ -24,6 +25,7 @@ import type {
   MediaContent,
 } from '../types';
 import type { ApiMessageAction } from '../types/messageActions';
+import type { PackImage } from './stickersState';
 import { ApiMessageEntityTypes } from '../types';
 
 import { getEmojiOnlyCountForMessage } from '../../global/helpers/getEmojiOnlyCountForMessage';
@@ -40,6 +42,7 @@ import {
   encodeMxc, findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId,
 } from './ids';
 import { getEncryptedFileMediaId } from './media';
+import { buildApiSticker, PACK_KEY, STICKER_MARKER } from './stickersState';
 import { getStoriesSummary } from './storiesState';
 import { buildTodoMedia } from './todo';
 import { getBadgeEmoji, isVerifiedId } from './verifiedState';
@@ -256,7 +259,7 @@ export function buildApiChatMember(member: RoomMember, room: Room): ApiChatMembe
 
 export function isMentioningUser(event: MatrixEvent, userId: string) {
   const content = event.getContent();
-  const mentions = content['m.mentions'] as { user_ids?: string[]; room?: boolean } | undefined;
+  const mentions = content['m.mentions'];
   if (mentions) return Boolean(mentions.room || mentions.user_ids?.includes(userId));
   // Older clients only put mentions in the message itself
   const html = typeof content.formatted_body === 'string' ? content.formatted_body : '';
@@ -298,12 +301,34 @@ function buildCaption(content: Record<string, any>, resolvePeerId: ChatContext['
   return { text: body };
 }
 
+// Web addresses typed as plain text, which Telegram's server would have marked as links
+const PLAIN_URL_REGEX = /\b(?:https?:\/\/|www\.|t\.me\/)[^\s<>"]+/gi;
+const URL_TRAILING_PUNCTUATION = /[.,!?;:'")\]}»…]+$/;
+
+function addUrlEntities(formatted: ApiFormattedText): ApiFormattedText {
+  const entities = formatted.entities || [];
+  const added: ApiMessageEntity[] = [];
+  for (const match of formatted.text.matchAll(PLAIN_URL_REGEX)) {
+    const url = match[0].replace(URL_TRAILING_PUNCTUATION, '');
+    const offset = match.index;
+    const end = offset + url.length;
+    const isCovered = entities.some((entity) => entity.offset < end && offset < entity.offset + entity.length
+      && entity.type !== ApiMessageEntityTypes.Bold && entity.type !== ApiMessageEntityTypes.Italic
+      && entity.type !== ApiMessageEntityTypes.Underline && entity.type !== ApiMessageEntityTypes.Strike);
+    if (url.length > 4 && !isCovered) {
+      added.push({ type: ApiMessageEntityTypes.Url, offset, length: url.length });
+    }
+  }
+  if (!added.length) return formatted;
+  return { ...formatted, entities: [...entities, ...added].sort((a, b) => a.offset - b.offset) };
+}
+
 function buildText(content: Record<string, any>, resolvePeerId: ChatContext['resolvePeerId']): ApiFormattedText {
   if (content.format === 'org.matrix.custom.html' && typeof content.formatted_body === 'string') {
-    return parseHtmlToFormattedText(content.formatted_body, resolvePeerId);
+    return addUrlEntities(parseHtmlToFormattedText(content.formatted_body, resolvePeerId));
   }
   const body = typeof content.body === 'string' ? content.body : '';
-  return { text: stripReplyFallback(body) };
+  return addUrlEntities({ text: stripReplyFallback(body) });
 }
 
 function buildPhoto(mediaId: string, content: Record<string, any>, date: number): ApiPhoto {
@@ -336,6 +361,11 @@ function buildMessageContent(
         entities: [{ type: ApiMessageEntityTypes.Italic, offset: 0, length: UNDECRYPTABLE_TEXT.length }],
       },
     };
+  }
+
+  if ((type === EventType.Sticker || content[STICKER_MARKER]) && typeof content.url === 'string') {
+    const pack = content[PACK_KEY];
+    return { sticker: buildApiSticker(content as PackImage, typeof pack === 'string' ? pack : undefined) };
   }
 
   if (type === EventType.Sticker) {

@@ -153,6 +153,37 @@ services:
         condition: service_completed_successfully
     networks: [frontend]
 
+  # Optional sticker bot: brings Telegram sticker packs here (docs/stickers.md).
+  # Enable with: docker compose --profile stickers up -d
+  sticker-bot:
+    build: ./server/sticker-bot
+    restart: unless-stopped
+    profiles: [stickers]
+    environment:
+      HOMESERVER_URL: http://synapse:8008
+      BOT_USER: ${STICKER_BOT_USER:-stickers}
+      BOT_PASSWORD: ${STICKER_BOT_PASSWORD:-}
+      TELEGRAM_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_PROXY: ${TELEGRAM_PROXY:-}
+      ADMIN_USERS: ${STICKER_ADMINS:-}
+      STATE_DIR: /data
+    volumes:
+      - ./data/sticker-bot:/data
+    depends_on: [synapse]
+    networks: [backend, frontend]
+
+  # Optional proxy for reaching Telegram where it is filtered; put an xray client config at
+  # data/xray/config.json (see server/xray/config.example.json) and set TELEGRAM_PROXY=socks5h://xray:10808
+  xray:
+    image: ghcr.io/xtls/xray-core:26.10.21
+    restart: unless-stopped
+    profiles: [stickers-proxy]
+    user: "0"
+    command: ["run", "-c", "/etc/xray/config.json"]
+    volumes:
+      - ./data/xray/config.json:/etc/xray/config.json:ro
+    networks: [frontend]
+
 networks:
   backend:
     internal: true

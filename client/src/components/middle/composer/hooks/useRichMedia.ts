@@ -248,16 +248,18 @@ export default function useRichMedia({
             uniqueId: `${Date.now()}-${Math.random()}`,
             shouldSendAsFile: true,
           });
-          attachment = isDocument
+          const prepared = isDocument
             ? buildDocument()
             : await buildAttachment(file.name, file, { shouldSendInHighQuality }).catch(() => undefined);
-          if (!isDocument && (!attachment || attachment.shouldSendAsFile
-            || !(isAudio ? attachment.audio : attachment.quick))) {
-            revokeAttachmentUrls(attachment);
+          attachment = prepared;
+          if (!isDocument && (!prepared || prepared.shouldSendAsFile
+            || !(isAudio ? prepared.audio : prepared.quick))) {
+            revokeAttachmentUrls(prepared);
             // A photo or video the browser can't open (an unusual codec, say) still goes, as a file
             if (!canSendDocuments || shouldAppend) return undefined;
             attachment = buildDocument();
           }
+          if (!attachment) return undefined;
 
           const uploadingMedia = buildUploadingMedia(attachment);
           const preview = uploadingMedia.photo || uploadingMedia.video

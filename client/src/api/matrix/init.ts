@@ -15,6 +15,7 @@ import * as lastSeen from './lastSeen';
 import { downloadMedia } from './media';
 import * as methods from './methods';
 import { parseSessionData } from './session';
+import * as stickers from './stickers';
 import * as stories from './stories';
 import * as stubs from './stubs';
 import * as verification from './verification';
@@ -47,6 +48,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...stubs,
   ...methods,
   ...stories,
+  ...stickers,
   ...admin,
   ...auth,
   ...calls,

@@ -280,6 +280,12 @@ alias_creation_rules:
 
 Then run `docker compose restart synapse`.
 
+### Sticker packs
+
+Tele has a sticker panel. An optional bot (`@stickers`) brings Telegram sticker packs to your server from a
+`t.me/addstickers/...` link; packs the server admins add show up for everyone. Setup, including a proxy for
+servers where Telegram is filtered: [docs/stickers.md](docs/stickers.md).
+
 ### Last-seen privacy module
 
 `server/synapse/modules/peyvand_last_seen.py` replaces Synapse's built-in presence, which is turned off. Built-in presence shows everyone's status to anyone in a shared room.
