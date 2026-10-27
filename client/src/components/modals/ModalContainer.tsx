@@ -14,8 +14,6 @@ import BrowserCloseConfirmationModal from '../main/BrowserCloseConfirmationModal
 import SafeLinkModal from '../main/SafeLinkModal.async';
 import AiMessageEditorModal from '../middle/composer/AiMessageEditorModal/AiMessageEditorModal.async';
 import AboutAdsModal from './aboutAds/AboutAdsModal.async';
-import EncryptionRecoveryModal from './encryptionRecovery/EncryptionRecoveryModal';
-import ServerAdminModal from './serverAdmin/ServerAdminModal';
 import AgeVerificationModal from './ageVerification/AgeVerificationModal.async';
 import AiTonePreviewModal from './aiTonePreview/AiTonePreviewModal.async';
 import AttachBotInstallModal from './attachBotInstall/AttachBotInstallModal.async';
@@ -32,6 +30,8 @@ import DeleteAccountModal from './deleteAccount/DeleteAccountModal.async';
 import DeleteMemberModal from './deleteMember/DeleteMemberModal.async';
 import DisableSharingAboutModal from './disableSharing/DisableSharingAboutModal.async';
 import EmojiStatusAccessModal from './emojiStatusAccess/EmojiStatusAccessModal.async';
+import DeviceVerificationModal from './encryptionRecovery/DeviceVerificationModal';
+import EncryptionRecoveryModal from './encryptionRecovery/EncryptionRecoveryModal';
 import FrozenAccountModal from './frozenAccount/FrozenAccountModal.async';
 import AboutStarGiftModal from './gift/AboutStarGiftModal.async';
 import ActiveGiftAuctionsModal from './gift/auction/ActiveGiftAuctionsModal.async';
@@ -79,6 +79,7 @@ import RankModal from './rank/RankModal.async';
 import ReportAdModal from './reportAd/ReportAdModal.async';
 import ReportModal from './reportModal/ReportModal.async';
 import RequestPeerModal from './requestPeer/RequestPeerModal.async';
+import ServerAdminModal from './serverAdmin/ServerAdminModal';
 import SharePreparedMessageModal from './sharePreparedMessage/SharePreparedMessageModal.async';
 import ChatRefundModal from './stars/chatRefund/ChatRefundModal.async';
 import StarsGiftModal from './stars/gift/StarsGiftModal.async';
@@ -134,6 +135,7 @@ type ModalKey = keyof Pick<TabState,
   'locationAccessModal' |
   'aboutAdsModal' |
   'encryptionRecoveryModal' |
+  'deviceVerificationModal' |
   'serverAdminModal' |
   'giftPreviewModal' |
   'giftUpgradeModal' |
@@ -281,6 +283,7 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   locationAccessModal: LocationAccessModal,
   aboutAdsModal: AboutAdsModal,
   encryptionRecoveryModal: EncryptionRecoveryModal,
+  deviceVerificationModal: DeviceVerificationModal,
   serverAdminModal: ServerAdminModal,
   giftPreviewModal: GiftPreviewModal,
   giftUpgradeModal: GiftUpgradeModal,

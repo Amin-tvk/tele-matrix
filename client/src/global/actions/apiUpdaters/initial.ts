@@ -97,6 +97,14 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       actions.checkEncryptionRecovery();
       break;
 
+    case 'updateDeviceVerification': {
+      const tabId = getCurrentTabId();
+      const current = selectTabState(global, tabId).deviceVerificationModal;
+      // A request from another device opens the window; later updates only change an open one
+      if (!update.verification || (!current && update.verification.state !== 'incoming')) return undefined;
+      return updateTabState(global, { deviceVerificationModal: update.verification }, tabId);
+    }
+
     case 'updateFetchingDifference':
       global = { ...global, isFetchingDifference: update.isFetching };
       setGlobal(global);

@@ -159,6 +159,10 @@ export interface ActionPayloads {
   openServerAdminModal: WithTabId | undefined;
   closeServerAdminModal: WithTabId | undefined;
   openEncryptionRecoveryModal: WithTabId | undefined;
+  requestDeviceVerification: WithTabId | undefined;
+  acceptDeviceVerification: WithTabId | undefined;
+  confirmDeviceVerification: { isMatch: boolean } & WithTabId;
+  closeDeviceVerificationModal: WithTabId | undefined;
   closeEncryptionRecoveryModal: WithTabId | undefined;
   restoreEncryptionKeys: { key: string } & WithTabId;
   setEncryptionRecoveryMode: { mode: 'restore' | 'setup' | 'ready' | 'reset' | 'broken' } & WithTabId;

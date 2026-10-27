@@ -27,7 +27,7 @@ const RECOVERY_KEY_FILE_NAME = 'peyvand-recovery-key.txt';
 const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
   const {
     restoreEncryptionKeys, closeEncryptionRecoveryModal, setupEncryptionRecovery, setEncryptionRecoveryMode,
-    showNotification, signOut,
+    showNotification, signOut, requestDeviceVerification,
   } = getActions();
   const lang = useLang();
 
@@ -88,6 +88,11 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
   const handleSignOut = useLastCallback(() => {
     handleClose();
     signOut({ forceInitApi: true });
+  });
+
+  const handleVerify = useLastCallback(() => {
+    setKey('');
+    requestDeviceVerification();
   });
 
   const handleDownload = useLastCallback(() => {
@@ -228,6 +233,9 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
         />
         <button type="button" className={styles.link} onClick={() => openMode('reset')}>
           {lang('MatrixRecoveryForgot')}
+        </button>
+        <button type="button" className={buildClassName(styles.link, styles.verifyLink)} onClick={handleVerify}>
+          {lang('MatrixVerifyWithDevice')}
         </button>
         <div className="dialog-buttons">
           <Button

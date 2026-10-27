@@ -10,6 +10,7 @@ import type {
   ApiChannelStatistics,
   ApiChatInviteInfo,
   ApiChatlistInvite,
+  ApiDeviceVerification,
   ApiChatType,
   ApiCheckedGiftCode,
   ApiCollectibleInfo,
@@ -302,6 +303,8 @@ export type TabState = {
   };
 
   serverAdminModal?: {};
+
+  deviceVerificationModal?: ApiDeviceVerification;
 
   encryptionRecoveryModal?: {
     // `setup` creates the first recovery key, `ready` is shown on a device that already has everything set up

@@ -16,6 +16,7 @@ import { downloadMedia } from './media';
 import * as methods from './methods';
 import { parseSessionData } from './session';
 import * as stubs from './stubs';
+import * as verification from './verification';
 
 const LOGOUT_TIMEOUT_MS = 2500;
 
@@ -49,6 +50,7 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...directory,
   ...folders,
   ...lastSeen,
+  ...verification,
   destroy,
   disconnect,
   restartAuth,

@@ -143,3 +143,34 @@ addActionHandler('restoreEncryptionKeys', async (global, actions, payload): Prom
   }, tabId);
   setGlobal(global);
 });
+
+// Confirming this sign-in from another device, by comparing emojis on both, instead of entering the recovery key
+addActionHandler('requestDeviceVerification', async (global, actions, payload): Promise<void> => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  global = updateTabState(global, {
+    encryptionRecoveryModal: undefined,
+    deviceVerificationModal: { state: 'waiting', isIncoming: false },
+  }, tabId);
+  setGlobal(global);
+
+  const isRequested = await callApi('requestDeviceVerification');
+  if (isRequested) return;
+  global = getGlobal();
+  global = updateTabState(global, { deviceVerificationModal: { state: 'cancelled', isIncoming: false } }, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('acceptDeviceVerification', (): ActionReturnType => {
+  void callApi('acceptDeviceVerification');
+});
+
+addActionHandler('confirmDeviceVerification', (global, actions, payload): ActionReturnType => {
+  void callApi('confirmDeviceVerification', { isMatch: payload.isMatch });
+});
+
+addActionHandler('closeDeviceVerificationModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const state = selectTabState(global, tabId).deviceVerificationModal?.state;
+  if (state !== 'done' && state !== 'cancelled') void callApi('cancelDeviceVerification');
+  return updateTabState(global, { deviceVerificationModal: undefined }, tabId);
+});

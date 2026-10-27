@@ -58,6 +58,7 @@ import {
   clearStore, flushStore, getValue, loadStore, setStoreName, setValue,
 } from './store';
 import { setTodoCompleterHandler, TODO_UPDATE_EVENT } from './todo';
+import { watchDeviceVerificationRequests } from './verification';
 
 let client: MatrixClient | undefined;
 let myUserId = '';
@@ -154,6 +155,7 @@ export async function startClient(session: MatrixSession, isFreshLogin?: boolean
   ]);
 
   subscribeToClient(client);
+  watchDeviceVerificationRequests(client);
 
   onUpdate({ '@type': 'updateApiReady' });
   onUpdate({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });

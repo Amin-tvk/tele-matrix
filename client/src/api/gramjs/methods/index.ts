@@ -10,6 +10,9 @@ export { fetchEncryptionStatus, restoreEncryptionKeys, setupEncryptionRecovery }
 export { retryConnectionNow } from '../../matrix/client';
 export { fetchMatrixCallIceServers, sendMatrixCallEvent } from '../../matrix/calls';
 export {
+  acceptDeviceVerification, cancelDeviceVerification, confirmDeviceVerification, requestDeviceVerification,
+} from '../../matrix/verification';
+export {
   createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminInvites, fetchAdminUsers, fetchIsServerAdmin,
   logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,
 } from '../../matrix/admin';

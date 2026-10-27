@@ -861,6 +861,23 @@ export type ApiUpdateEncryptionKeysMissing = {
   '@type': 'updateEncryptionKeysMissing';
 };
 
+// Confirming a new sign-in from another device of the same account by comparing emojis
+export type ApiDeviceVerification = {
+  // `incoming` waits for this device to accept, `emoji` shows the emojis to compare, `confirmed` waits for the other
+  // device to confirm too
+  state: 'waiting' | 'incoming' | 'emoji' | 'confirmed' | 'done' | 'cancelled';
+  isIncoming: boolean;
+  otherDeviceId?: string;
+  emojis?: { emoji: string; name: string }[];
+  // Messages restored from the key backup once this new device is trusted
+  restoredCount?: number;
+};
+
+export type ApiUpdateDeviceVerification = {
+  '@type': 'updateDeviceVerification';
+  verification?: ApiDeviceVerification;
+};
+
 // Signaling of a one-to-one Matrix call in the private chat with `userId`
 export type ApiUpdateMatrixCallEvent = {
   '@type': 'updateMatrixCallEvent';
@@ -1049,7 +1066,7 @@ export type ApiUpdateWebPage = {
 };
 
 export type ApiUpdate = (
-  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateMatrixCallEvent | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
+  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateMatrixCallEvent | ApiUpdateDeviceVerification | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
   ApiUpdateAuthorizationState | ApiUpdateAuthorizationError | ApiUpdateConnectionState | ApiUpdateCurrentUser |
   ApiUpdateChat | ApiUpdateChatTypingStatus | ApiUpdateChatFullInfo | ApiUpdatePinnedChatIds |
   ApiUpdateChatMembers | ApiUpdateChatParticipantRank | ApiUpdateChatJoin | ApiUpdateChatLeave
