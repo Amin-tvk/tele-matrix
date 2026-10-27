@@ -3367,6 +3367,7 @@ export interface LangPair {
   'PeyvandVerifiedRemoved': undefined;
   'PeyvandBadgeTitle': undefined;
   'PeyvandBadgeDescription': undefined;
+  'PeyvandVerifySelf': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;

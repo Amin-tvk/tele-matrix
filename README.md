@@ -245,7 +245,8 @@ scripts/new-invite.sh alice 5 30   # as admin "alice": 5 uses, valid for 30 days
 
 ### Blue ticks
 
-Server admins give or take a tick from a chat's **⋮** menu (**Give Blue Tick**), for people and channels. Verified
+Server admins give or take a tick from a chat's **⋮** menu (**Give Blue Tick**), for people and channels, and give
+themselves one in **Settings → Edit Profile**. Verified
 people choose in **Settings → Edit Profile** whether the tick or an emoji appears next to their name.
 
 The ticks live in a registry room with the address `#peyvand-verified:MATRIX_DOMAIN`, which an admin's app creates

@@ -4570,3 +4570,4 @@
 "PeyvandVerifiedRemoved" = "Blue tick removed";
 "PeyvandBadgeTitle" = "Verified Badge";
 "PeyvandBadgeDescription" = "Your account is verified. Choose whether the blue tick or an emoji appears next to your name.";
+"PeyvandVerifySelf" = "Give Yourself a Blue Tick";

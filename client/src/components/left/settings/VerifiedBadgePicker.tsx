@@ -1,4 +1,4 @@
-import { memo, useState } from '../../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import { selectUser } from '../../../global/selectors';
@@ -11,10 +11,12 @@ import useLastCallback from '../../../hooks/useLastCallback';
 
 import VerifiedIcon from '../../common/VerifiedIcon';
 import Island, { IslandDescription, IslandTitle } from '../../gili/layout/Island';
+import Button from '../../ui/Button';
 
 import styles from './VerifiedBadgePicker.module.scss';
 
 type StateProps = {
+  currentUserId?: string;
   isVerified?: boolean;
   badgeEmoji?: string;
 };
@@ -24,10 +26,25 @@ const BADGE_EMOJIS = [
 ];
 
 // People given the blue tick by a server admin choose whether it shows as the tick or as an emoji
-const VerifiedBadgePicker = ({ isVerified, badgeEmoji }: StateProps) => {
+const VerifiedBadgePicker = ({ currentUserId, isVerified, badgeEmoji }: StateProps) => {
   const { showNotification } = getActions();
   const lang = useLang();
   const [isSaving, setIsSaving] = useState(false);
+  const [isServerAdmin, setIsServerAdmin] = useState(false);
+
+  useEffect(() => {
+    if (isVerified) return;
+    void callApi('fetchIsServerAdmin').then((result) => setIsServerAdmin(Boolean(result)));
+  }, [isVerified]);
+
+  // Admins can't open their own chat menu to give the tick, so they verify themselves here
+  const handleVerifySelf = useLastCallback(async () => {
+    if (!currentUserId || isSaving) return;
+    setIsSaving(true);
+    const result = await callApi('setPeerVerified', { peer: { id: currentUserId }, isVerified: true });
+    setIsSaving(false);
+    showNotification({ message: { key: result ? 'PeyvandVerifiedGiven' : 'SomethingWentWrong' } });
+  });
 
   const handleSelect = useLastCallback(async (emoji?: string) => {
     if (isSaving || emoji === (badgeEmoji || undefined)) return;
@@ -37,7 +54,19 @@ const VerifiedBadgePicker = ({ isVerified, badgeEmoji }: StateProps) => {
     if (!result) showNotification({ message: { key: 'SomethingWentWrong' } });
   });
 
-  if (!isVerified) return undefined;
+  if (!isVerified) {
+    if (!isServerAdmin) return undefined;
+    return (
+      <>
+        <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('PeyvandBadgeTitle')}</IslandTitle>
+        <Island>
+          <Button isText noForcedUpperCase disabled={isSaving} onClick={handleVerifySelf}>
+            {lang('PeyvandVerifySelf')}
+          </Button>
+        </Island>
+      </>
+    );
+  }
 
   function renderOption(emoji?: string) {
     const isSelected = (emoji || '') === (badgeEmoji || '');
@@ -74,6 +103,7 @@ export default memo(withGlobal(
   (global): Complete<StateProps> => {
     const user = global.currentUserId ? selectUser(global, global.currentUserId) : undefined;
     return {
+      currentUserId: global.currentUserId,
       isVerified: user?.isVerified,
       badgeEmoji: user?.badgeEmoji,
     };
