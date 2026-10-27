@@ -8,7 +8,11 @@
 
 End-to-end encryption · Your server, your data · Web app + installable PWA · `docker compose up` and done
 
-[Features](#-features) · [Install](#-install) · [Configuration](#-configuration) · [Architecture](#-architecture) · [Development](#-development) · [Troubleshooting](#-troubleshooting)
+[![Docker images](https://github.com/Amin-tvk/tele-matrix/actions/workflows/docker.yml/badge.svg)](https://github.com/Amin-tvk/tele-matrix/actions/workflows/docker.yml)
+[![peyvand-web on Docker Hub](https://img.shields.io/docker/v/amintvk/peyvand-web?sort=semver&label=amintvk%2Fpeyvand-web&logo=docker)](https://hub.docker.com/r/amintvk/peyvand-web)
+[![Docker pulls](https://img.shields.io/docker/pulls/amintvk/peyvand-web?logo=docker)](https://hub.docker.com/r/amintvk/peyvand-web)
+
+[Features](#-features) · [Install](#-install) · [Docker images](#-docker-images) · [Configuration](#-configuration) · [Architecture](#-architecture) · [Development](#-development) · [Troubleshooting](#-troubleshooting)
 
 <br>
 
@@ -137,7 +141,9 @@ ADMIN_EMAIL=you@example.com
 docker compose up -d
 ```
 
-The first start takes a few minutes because it builds the app. On that start:
+The first start takes a few minutes because it builds the app. To skip the build and pull the ready-made image
+from Docker Hub instead, add `PEYVAND_WEB_IMAGE=amintvk/peyvand-web:latest` to `.env` first (see
+[Docker images](#-docker-images)). On that start:
 
 1. **init** generates every secret and config in `./data`: database password, Synapse secrets and signing key, Web Push keys, and the Sygnal and admin UI configs.
 2. **PostgreSQL**, **Synapse** and **Sygnal** start.
@@ -185,6 +191,81 @@ sudo nginx -t && sudo systemctl reload nginx
 
 📖 **Full guide:** [docs/nginx.md](docs/nginx.md). It covers certificates with certbot, keeping your other sites,
 CDNs (Cloudflare, ArvanCloud) and other proxies.
+
+## 🐳 Docker images
+
+Peyvand's own images are on Docker Hub, built by GitHub Actions on every push to `main` for **linux/amd64** and
+**linux/arm64**. Everything else in the stack uses official images (Synapse, PostgreSQL, Sygnal, coturn, Caddy).
+
+| Image | What's inside |
+|---|---|
+| [`amintvk/peyvand-web`](https://hub.docker.com/r/amintvk/peyvand-web) | The Peyvand web app (the Telegram-style client) served by nginx on port 80 |
+| [`amintvk/peyvand-sticker-bot`](https://hub.docker.com/r/amintvk/peyvand-sticker-bot) | The optional sticker bot ([docs/stickers.md](docs/stickers.md)) |
+
+**Tags:** `latest` follows `main`; `sha-<commit>` pins one build; release tags like `v1.2.3` publish `1.2.3`
+and `1.2`. Pin a version on production servers if you don't want updates by surprise.
+
+### How the web image works
+
+The app is built **once**, with placeholders where the domains go. Each time the container starts it copies the
+app into nginx's folder and fills in your settings, so **the same image works for every server** and changing a
+domain only needs a restart.
+
+| Setting | Required | Description |
+|---|---|---|
+| `APP_DOMAIN` | yes | Domain the app is served on, e.g. `chat.example.com` |
+| `MATRIX_DOMAIN` | yes | Your homeserver's domain, e.g. `matrix.example.com` |
+| `PUSH_APP_ID` | no | Web Push app ID (default `com.example.peyvand.web`) |
+| `/peyvand/vapid_public.txt` | no | Mounted file with the Web Push public key; without it push notifications are off |
+
+The container listens on port **80** (plain HTTP); HTTPS comes from Caddy or your own proxy in front of it.
+
+### Pull it
+
+```bash
+docker pull amintvk/peyvand-web:latest
+```
+
+```bash
+docker pull amintvk/peyvand-sticker-bot:latest
+```
+
+### Use it with Docker Compose (recommended)
+
+Add these to `.env` so `docker compose` pulls the images instead of building them:
+
+```ini
+PEYVAND_WEB_IMAGE=amintvk/peyvand-web:latest
+PEYVAND_STICKER_BOT_IMAGE=amintvk/peyvand-sticker-bot:latest
+```
+
+Then start, or update later, with:
+
+```bash
+docker compose pull
+```
+
+```bash
+docker compose up -d
+```
+
+Leave the two variables empty to build on your own server instead (needs about 4 GB of RAM for the build).
+
+### Run only the web app
+
+If you already have a Matrix homeserver and only want the client:
+
+```bash
+docker run -d --name peyvand-web --restart unless-stopped -p 8080:80 -e APP_DOMAIN=chat.example.com -e MATRIX_DOMAIN=matrix.example.com amintvk/peyvand-web:latest
+```
+
+Then point your HTTPS proxy for `chat.example.com` at `http://127.0.0.1:8080`.
+
+### Publishing your own images
+
+Fork the repository and add two secrets under **Settings → Secrets and variables → Actions**:
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token with Read & Write). Each push to `main`
+then publishes the images under your name. Details: [docs/docker-hub.md](docs/docker-hub.md).
 
 ## ⚙️ Configuration
 
@@ -280,11 +361,6 @@ alias_creation_rules:
 
 Then run `docker compose restart synapse`.
 
-### Ready-made images on Docker Hub
-
-A GitHub Actions workflow builds the web app and sticker bot images and pushes them to Docker Hub, so servers can
-pull them instead of building: [docs/docker-hub.md](docs/docker-hub.md).
-
 ### Sticker packs
 
 Tele has a sticker panel. An optional bot (`@stickers`) brings Telegram sticker packs to your server from a
@@ -356,6 +432,9 @@ git pull
 docker compose pull
 docker compose up -d --build
 ```
+
+With the Docker Hub images (`PEYVAND_WEB_IMAGE` set), `docker compose pull` fetches the new app and
+`--build` isn't needed.
 
 Your files in `data/` are kept as they are. When a release mentions a config change, compare them with `server/templates/`.
 
