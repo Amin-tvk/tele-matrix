@@ -38,7 +38,7 @@ You get Telegram's speed, animations and polish. Users sign up with an invite co
 | | |
 |---|---|
 | 💬 **Messaging** | Private chats, groups and channels, replies, edits, forwards, pins, drafts, search |
-| 🔐 **End-to-end encryption** | Matrix E2EE (Olm/Megolm). A new sign-in is verified from another device by comparing emojis, or with a recovery key or passphrase |
+| 🔐 **End-to-end encryption** | Matrix E2EE (Olm/Megolm). The key backup is created on the first sign-in and protected by the account password, so a new device reads earlier messages right after signing in. Verifying from another device by comparing emojis works too |
 | 📶 **Weak networks** | Messages and uploads wait out dropped connections and send themselves when it's back, with a clock until delivered |
 | 📁 **Chat folders** | Telegram-style folders and filters, synced across devices |
 | ✅ **Checklists** | Shared to-do lists in chats: others can tick items or add tasks |
@@ -224,6 +224,19 @@ The init service never overwrites a file that already exists. Common changes:
 - **Open registration:** `registration_requires_token: false`. Use this only together with a captcha or email verification.
 - **Upload limit:** `max_upload_size`. Also change `max_size` in `server/caddy/Caddyfile`.
 - **Email** (password resets, notifications): see the [Synapse docs](https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html#email).
+
+### Message key backup
+
+Encrypted messages can only be read with keys held by the person's devices. So that a new device can read earlier
+messages, the app backs up these keys from the first sign-in, protected by the **account password**: signing in
+on a new device restores them with no recovery key, like in Telegram.
+
+- Accounts that set up a recovery key earlier enter it once on their next sign-in; the backup then moves to the
+  password.
+- After an admin resets someone's password, their next sign-in asks for the **previous** password once, then
+  switches to the new one.
+- Trade-off: whoever knows an account's password (including whoever runs the server and sees it at sign-in)
+  could open that account's backup.
 
 ### Invites
 

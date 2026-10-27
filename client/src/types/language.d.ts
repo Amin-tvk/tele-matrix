@@ -3382,6 +3382,8 @@ export interface LangPair {
   'PeyvandStoryKeepOnProfileHint': undefined;
   'PeyvandStoryPost': undefined;
   'PeyvandStoryPosted': undefined;
+  'PeyvandRecoveryPasswordDescription': undefined;
+  'PeyvandRecoveryPreviousPassword': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;

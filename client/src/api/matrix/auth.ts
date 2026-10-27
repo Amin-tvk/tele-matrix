@@ -2,6 +2,7 @@ import type { RegularLangFnParameters } from '../../util/localization/types';
 import type { MatrixSession } from './session';
 
 import { onUpdate, startClient } from './client';
+import { startAutomaticBackup } from './encryption';
 import { DEVICE_DISPLAY_NAME, MATRIX_HOMESERVER_URL } from './constants';
 
 type MatrixErrorResponse = {
@@ -67,6 +68,7 @@ export async function provideMatrixLogin({ username, password }: { username: str
     }
 
     await startClient(buildSession(data), true);
+    startAutomaticBackup(password);
   } catch {
     sendAuthError({ key: 'MatrixErrorNetwork' });
   }
@@ -133,6 +135,7 @@ export async function provideMatrixRegistration({
     }
 
     await startClient(session, true);
+    startAutomaticBackup(password);
   } catch {
     sendAuthError({ key: 'MatrixErrorNetwork' });
   }

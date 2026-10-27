@@ -4586,3 +4586,5 @@
 "PeyvandStoryPost" = "Post Story";
 "PeyvandStoryPosted" = "Story posted. It's visible for 24 hours.";
 "PeyvandStoryVideoTooLong" = "Videos in stories can be up to {count} seconds long.";
+"PeyvandRecoveryPasswordDescription" = "Your message backup opens with your account password, but the password has changed since. Enter your previous password (or your recovery key, if you saved one) to read earlier messages. From then on, your current password opens it.";
+"PeyvandRecoveryPreviousPassword" = "Previous password or recovery key";

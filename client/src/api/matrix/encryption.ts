@@ -23,6 +23,8 @@ export type EncryptionStatus = {
   isCrossSigningReady: boolean;
   // This device's identity differs from the one the server publishes for it, so no one can send it keys
   isDeviceBroken: boolean;
+  // The backup opens with the account password; after an admin reset it's the previous password
+  isPasswordBased: boolean;
 };
 
 export type RecoverySetupResult = {
@@ -37,6 +39,77 @@ export type RecoveryResult = {
 };
 
 let pendingSecretStorageKey: { keyId: string; key: Uint8Array<ArrayBuffer> } | undefined;
+
+/* Backup opened with the account password */
+
+// Like in Telegram, signing in on a new device shows the earlier messages right away: the backup of message keys
+// is protected by the account password, so the password typed at sign-in unlocks it. The password is kept in
+// this worker's memory only, for the current session
+const PASSWORD_BACKUP_EVENT = 'im.peyvand.password_backup';
+const CRYPTO_READY_WAIT_MS = 30000;
+const CRYPTO_READY_POLL_MS = 250;
+
+let signInPassword: string | undefined;
+let automaticBackupTask: Promise<void> | undefined;
+
+function isPasswordBackup() {
+  return Boolean(getClient().getAccountData(PASSWORD_BACKUP_EVENT as never)?.getContent<{ enabled?: boolean }>().enabled);
+}
+
+async function markPasswordBackup() {
+  await getClient().setAccountData(PASSWORD_BACKUP_EVENT as never, { enabled: true } as never).catch(() => undefined);
+}
+
+async function waitForCrypto() {
+  const deadline = Date.now() + CRYPTO_READY_WAIT_MS;
+  while (!getClient().getCrypto() && Date.now() < deadline) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, CRYPTO_READY_POLL_MS);
+    });
+  }
+  return getClient().getCrypto();
+}
+
+// Switches secret storage to the current password, keeping the backup, cross-signing and this device's trust
+async function protectWithPassword(password: string) {
+  const result = await setupEncryptionRecovery({ passphrase: password, password });
+  if (!result.errorKey) await markPasswordBackup();
+  return !result.errorKey;
+}
+
+async function runAutomaticBackup(password: string) {
+  await waitForSync();
+  if (!await waitForCrypto()) return;
+  if (await checkIsDeviceBroken()) return;
+
+  const hasSecretStorage = Boolean(await getClient().secretStorage.getDefaultKeyId().catch(() => null));
+  if (!hasSecretStorage) {
+    // First sign-in of the account: the backup starts now, protected by the password
+    await protectWithPassword(password);
+    return;
+  }
+
+  const result = await restoreEncryptionKeys({ key: password });
+  if (!result.errorKey && !isPasswordBackup()) {
+    // An account set up with the old recovery key, which happens to accept this password as its passphrase
+    await markPasswordBackup();
+  }
+  // Otherwise the backup is protected by a recovery key or an earlier password; the person enters it once and
+  // the backup then moves to the current password (see `restoreEncryptionKeys`)
+}
+
+// Called on sign-in and registration, before the client starts
+export function startAutomaticBackup(password: string) {
+  signInPassword = password;
+  automaticBackupTask = runAutomaticBackup(password).catch((err) => {
+    if (DEBUG) console.warn('[matrix] Automatic key backup failed', err);
+  });
+}
+
+export function clearSignInPassword() {
+  signInPassword = undefined;
+  automaticBackupTask = undefined;
+}
 
 export function getSecretStorageKeyCallback(
   { keys }: { keys: Record<string, SecretStorageKeyDescription> },
@@ -61,6 +134,8 @@ function looksLikeRecoveryKey(input: string) {
 export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefined> {
   if (!hasClient()) return undefined;
   await waitForSync();
+  // The recovery prompt waits until the password has unlocked or created the backup
+  await automaticBackupTask;
   const client = getClient();
   const crypto = client.getCrypto();
   if (!crypto) {
@@ -72,6 +147,7 @@ export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefi
       isBackupActive: false,
       isCrossSigningReady: false,
       isDeviceBroken: false,
+      isPasswordBased: false,
     };
   }
 
@@ -94,6 +170,7 @@ export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefi
     isBackupActive: Boolean(activeBackup),
     isCrossSigningReady,
     isDeviceBroken,
+    isPasswordBased: isPasswordBackup(),
   };
 }
 
@@ -252,6 +329,11 @@ export async function restoreEncryptionKeys({ key: input }: { key: string }): Pr
       return { imported: 0, total: 0, errorKey: 'MatrixRecoveryErrorNoBackup' };
     }
     const result = await crypto.restoreKeyBackup();
+    // Unlocked with a recovery key or an earlier password: from now on the current password opens the backup
+    const password = signInPassword;
+    if (password && input.trim() !== password && unlocked) {
+      await protectWithPassword(password).catch(() => undefined);
+    }
     return { imported: result.imported, total: result.total };
   } catch (err) {
     if (DEBUG) console.warn('[matrix] Key recovery failed', err);

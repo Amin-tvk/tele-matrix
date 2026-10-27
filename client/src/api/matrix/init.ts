@@ -31,6 +31,7 @@ async function destroy(noLogOut = false, noClearLocalDb = false) {
       }),
     ]);
   }
+  encryption.clearSignInPassword();
   await stopClient(!noClearLocalDb);
 }
 

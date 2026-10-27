@@ -79,7 +79,9 @@ addActionHandler('openEncryptionRecoveryModal', async (global, actions, payload)
     : status.isDeviceBroken ? 'broken'
       : !status.hasSecretStorage && status.hasKeyBackup && !status.isBackupActive ? 'restore'
         : getRecoveryMode(status);
-  global = updateTabState(global, { encryptionRecoveryModal: { mode } }, tabId);
+  global = updateTabState(global, {
+    encryptionRecoveryModal: { mode, isPasswordBased: status?.isPasswordBased || undefined },
+  }, tabId);
   setGlobal(global);
 });
 

@@ -311,6 +311,8 @@ export type TabState = {
   encryptionRecoveryModal?: {
     // `setup` creates the first recovery key, `ready` is shown on a device that already has everything set up
     mode?: 'restore' | 'setup' | 'ready' | 'reset' | 'broken';
+    // The backup opens with the account password, so a restore here asks for the previous one
+    isPasswordBased?: boolean;
     isLoading?: boolean;
     errorKey?: 'MatrixRecoveryErrorWrongKey' | 'MatrixRecoveryErrorNoBackup' | 'MatrixRecoveryErrorUnknown'
       | 'MatrixSetupPasswordNeeded' | 'MatrixSetupWrongPassword';

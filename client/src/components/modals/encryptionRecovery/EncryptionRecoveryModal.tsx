@@ -35,6 +35,7 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
   const renderingModal = useCurrentOrPrev(modal);
   const {
     mode, isLoading, errorKey, restoredCount, recoveryKey,
+    isPasswordBased,
   } = renderingModal || {};
   const isRestoreDone = restoredCount !== undefined;
   const isPasswordShown = mode === 'reset'
@@ -221,11 +222,13 @@ const EncryptionRecoveryModal = ({ modal }: OwnProps) => {
 
     return (
       <form onSubmit={handleRestoreSubmit}>
-        <p className={styles.description}>{lang('MatrixRecoveryDescription')}</p>
+        <p className={styles.description}>
+          {lang(isPasswordBased ? 'PeyvandRecoveryPasswordDescription' : 'MatrixRecoveryDescription')}
+        </p>
         <InputText
           id="matrix-recovery-key"
           type="password"
-          label={lang('MatrixRecoveryKey')}
+          label={lang(isPasswordBased ? 'PeyvandRecoveryPreviousPassword' : 'MatrixRecoveryKey')}
           value={key}
           error={errorKey ? lang(errorKey) : undefined}
           onChange={handleKeyChange}
