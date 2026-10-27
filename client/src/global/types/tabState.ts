@@ -304,6 +304,8 @@ export type TabState = {
 
   serverAdminModal?: {};
 
+  storyComposerModal?: {};
+
   deviceVerificationModal?: ApiDeviceVerification;
 
   encryptionRecoveryModal?: {

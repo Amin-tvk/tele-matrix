@@ -14,6 +14,7 @@ export {
 } from '../../matrix/verification';
 export { setMyBadgeEmoji, setPeerVerified } from '../../matrix/verifiedBadges';
 export { setChannelComments } from '../../matrix/methods';
+export { sendStory } from '../../matrix/stories';
 export {
   createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminChannels, fetchAdminInvites, fetchAdminUsers,
   fetchIsServerAdmin, logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,

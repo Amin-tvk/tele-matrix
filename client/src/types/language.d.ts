@@ -3375,6 +3375,13 @@ export interface LangPair {
   'PeyvandCommentsToggle': undefined;
   'PeyvandCommentsDescription': undefined;
   'PeyvandCommentsEncrypted': undefined;
+  'PeyvandStoryNew': undefined;
+  'PeyvandStoryAdd': undefined;
+  'PeyvandStoryChoose': undefined;
+  'PeyvandStoryKeepOnProfile': undefined;
+  'PeyvandStoryKeepOnProfileHint': undefined;
+  'PeyvandStoryPost': undefined;
+  'PeyvandStoryPosted': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;
@@ -3457,6 +3464,9 @@ export interface LangPair {
 export interface LangPairWithVariables<V = LangVariable> {
   'MatrixAdminJoined': {
     'date': V;
+  };
+  'PeyvandStoryVideoTooLong': {
+    'count': V;
   };
   'MatrixAdminStats': {
     'users': V;

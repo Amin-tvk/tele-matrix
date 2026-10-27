@@ -98,6 +98,7 @@ const LeftSideMenuItems = ({
     openChatWithInfo,
     openSettingsScreen,
     openWalletModal,
+    openStoryComposerModal,
   } = getActions();
   const lang = useLang();
   const [isSwitchToWebKDialogOpen, openSwitchToWebKDialog, closeSwitchToWebKDialog] = useFlag();
@@ -210,6 +211,14 @@ const LeftSideMenuItems = ({
           {archivedUnreadChatsCount > 0 && (
             <div className="right-badge">{archivedUnreadChatsCount}</div>
           )}
+        </MenuItem>
+      )}
+      {currentUser?.isVerified && (
+        <MenuItem
+          icon="camera-add"
+          onClick={() => openStoryComposerModal()}
+        >
+          {lang('PeyvandStoryAdd')}
         </MenuItem>
       )}
       <MenuItem

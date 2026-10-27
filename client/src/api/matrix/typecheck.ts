@@ -7,15 +7,18 @@ import type * as directory from './directory';
 import type * as folders from './folders';
 import type * as lastSeen from './lastSeen';
 import type * as methods from './methods';
+import type * as stories from './stories';
 
-type Implementations = typeof methods & typeof auth & typeof directory & typeof folders & typeof lastSeen;
+type Implementations = typeof methods & typeof auth & typeof directory & typeof folders & typeof lastSeen
+  & typeof stories;
 // Results differ in optional fields or are raw request results; callers only check that the call succeeded
 type TruthyResultMethods = 'deleteChatMember' | 'leaveChannel' | 'deleteChatUser' | 'deleteChat' | 'deleteChannel'
   | 'editChatPhoto' | 'toggleChatArchived' | 'updateChatAdmin' | 'updateProfile' | 'sendReaction' | 'addChatMembers'
   | 'fetchChat' | 'uploadProfilePhoto' | 'fetchChatFolders' | 'fetchMessages' | 'sendMessageLocal' | 'sendMessage'
   | 'editMessage' | 'fetchFullUser' | 'registerDevice' | 'unregisterDevice'
   | 'updateNotificationSettings' | 'sortChatFolders' | 'toggleDialogFilterTags' | 'deleteChatFolder'
-  | 'editChatFolder' | 'editTodo' | 'toggleTodoCompleted' | 'appendTodoList';
+  | 'editChatFolder' | 'editTodo' | 'toggleTodoCompleted' | 'appendTodoList' | 'deleteStory' | 'markStoryRead'
+  | 'toggleStoryInProfile';
 type Overlap = Exclude<Extract<keyof Implementations, keyof Methods>, TruthyResultMethods>;
 
 type CheckedMethods = {

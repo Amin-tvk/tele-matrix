@@ -80,6 +80,7 @@ import ReportAdModal from './reportAd/ReportAdModal.async';
 import ReportModal from './reportModal/ReportModal.async';
 import RequestPeerModal from './requestPeer/RequestPeerModal.async';
 import ServerAdminModal from './serverAdmin/ServerAdminModal';
+import StoryComposerModal from './storyComposer/StoryComposerModal';
 import SharePreparedMessageModal from './sharePreparedMessage/SharePreparedMessageModal.async';
 import ChatRefundModal from './stars/chatRefund/ChatRefundModal.async';
 import StarsGiftModal from './stars/gift/StarsGiftModal.async';
@@ -137,6 +138,7 @@ type ModalKey = keyof Pick<TabState,
   'encryptionRecoveryModal' |
   'deviceVerificationModal' |
   'serverAdminModal' |
+  'storyComposerModal' |
   'giftPreviewModal' |
   'giftUpgradeModal' |
   'giftCraftModal' |
@@ -285,6 +287,7 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   encryptionRecoveryModal: EncryptionRecoveryModal,
   deviceVerificationModal: DeviceVerificationModal,
   serverAdminModal: ServerAdminModal,
+  storyComposerModal: StoryComposerModal,
   giftPreviewModal: GiftPreviewModal,
   giftUpgradeModal: GiftUpgradeModal,
   giftCraftModal: GiftCraftModal,

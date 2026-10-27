@@ -158,6 +158,8 @@ export interface ActionPayloads {
   checkEncryptionRecovery: undefined;
   openServerAdminModal: WithTabId | undefined;
   closeServerAdminModal: WithTabId | undefined;
+  openStoryComposerModal: WithTabId | undefined;
+  closeStoryComposerModal: WithTabId | undefined;
   openEncryptionRecoveryModal: WithTabId | undefined;
   requestDeviceVerification: WithTabId | undefined;
   acceptDeviceVerification: WithTabId | undefined;

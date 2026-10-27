@@ -1,5 +1,7 @@
 import type { MatrixEvent, Room, RoomMember } from 'matrix-js-sdk';
-import { EventType, MsgType, RelationType } from 'matrix-js-sdk';
+import {
+  EventType, MatrixEvent as MatrixEventClass, MsgType, RelationType,
+} from 'matrix-js-sdk';
 
 import type {
   ApiAudio,
@@ -38,6 +40,7 @@ import {
   encodeMxc, findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId,
 } from './ids';
 import { getEncryptedFileMediaId } from './media';
+import { getStoriesSummary } from './storiesState';
 import { buildTodoMedia } from './todo';
 import { getBadgeEmoji, isVerifiedId } from './verifiedState';
 
@@ -87,6 +90,8 @@ export function buildApiUser(
     // Sent as `false` too, so taking the tick away reaches the UI
     isVerified: isVerifiedId(userId),
     badgeEmoji: getBadgeEmoji(userId) || '',
+    // People with the blue tick can post stories; their avatars get the story ring
+    ...getStoriesSummary(userId),
   });
 }
 
@@ -444,6 +449,18 @@ function buildMessageContent(
   }
 
   return typeof content.body === 'string' ? { text: { text: content.body } } : undefined;
+}
+
+// Stories keep their media in the shape of a Matrix message, and are built like one
+export function buildStoryContent(
+  content: Record<string, unknown>, ts: number, resolvePeerId: ChatContext['resolvePeerId'],
+): MediaContent | undefined {
+  const event = new MatrixEventClass({
+    type: EventType.RoomMessage, content, origin_server_ts: ts, event_id: `$story${ts}`,
+  });
+  return buildMessageContent(event, {
+    chatId: '', isPrivate: false, isChannel: false, myUserId: '', resolvePeerId,
+  });
 }
 
 function buildMembershipAction(event: MatrixEvent, context: ChatContext): ApiMessageAction | undefined {

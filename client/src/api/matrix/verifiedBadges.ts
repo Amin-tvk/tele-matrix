@@ -8,6 +8,8 @@ import {
   buildChat, buildUser, getClient, getMyUserId, getVisibleRooms, hasClient, onUpdate,
 } from './client';
 import { getRoomIdByGroupChatId, getUserIdByPeerId, isUserPeerId } from './ids';
+import { applyProfileStories } from './stories';
+import { STORIES_PROFILE_FIELD } from './storiesState';
 import {
   getBadgeEmoji, getVerifiedIds, setBadgeEmoji, setVerifiedIds,
 } from './verifiedState';
@@ -47,13 +49,12 @@ async function resolveRegistryRoomId() {
   }
 }
 
-async function fetchBadgeEmoji(userId: string) {
+// A verified person's profile holds their badge emoji and their stories
+async function fetchVerifiedProfile(userId: string) {
   try {
-    const profile = await getClient().http.authedRequest<Record<string, unknown>>(
+    return await getClient().http.authedRequest<Record<string, unknown>>(
       Method.Get, `/profile/${encodeURIComponent(userId)}`,
     );
-    const emoji = profile[BADGE_PROFILE_FIELD];
-    return typeof emoji === 'string' && emoji ? emoji : undefined;
   } catch {
     return undefined;
   }
@@ -104,10 +105,16 @@ export async function refreshVerifiedBadges() {
   setVerifiedIds(ids);
 
   await Promise.all([...ids].filter((id) => id.startsWith('@')).map(async (userId) => {
-    const emoji = await fetchBadgeEmoji(userId);
+    const profile = await fetchVerifiedProfile(userId);
+    if (!profile) return;
+    const badge = profile[BADGE_PROFILE_FIELD];
+    const emoji = typeof badge === 'string' && badge ? badge : undefined;
     if (emoji !== getBadgeEmoji(userId)) changed.add(userId);
     setBadgeEmoji(userId, emoji);
+    applyProfileStories(userId, profile[STORIES_PROFILE_FIELD]);
   }));
+  // People whose tick was taken away lose their stories too
+  [...previous].filter((id) => id.startsWith('@') && !ids.has(id)).forEach((userId) => applyProfileStories(userId, []));
 
   announceChanges([...changed]);
 }

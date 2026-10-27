@@ -4578,3 +4578,11 @@
 "PeyvandCommentsToggle" = "Comments";
 "PeyvandCommentsDescription" = "Subscribers can comment under each post. Comments are shown under the post with a comment button; only admins can still post to the channel.";
 "PeyvandCommentsEncrypted" = "Comments can't be turned on in an encrypted channel.";
+"PeyvandStoryNew" = "New Story";
+"PeyvandStoryAdd" = "Post a Story";
+"PeyvandStoryChoose" = "Choose a Photo or Video";
+"PeyvandStoryKeepOnProfile" = "Keep on my profile";
+"PeyvandStoryKeepOnProfileHint" = "Stays in the Posts tab of your profile after the 24 hours.";
+"PeyvandStoryPost" = "Post Story";
+"PeyvandStoryPosted" = "Story posted. It's visible for 24 hours.";
+"PeyvandStoryVideoTooLong" = "Videos in stories can be up to {count} seconds long.";

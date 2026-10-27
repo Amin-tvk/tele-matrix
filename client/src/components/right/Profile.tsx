@@ -26,7 +26,7 @@ import { MAIN_THREAD_ID } from '../../api/types';
 import { LoadMoreDirection, MediaViewerOrigin, NewChatMembersProgress } from '../../types';
 
 import {
-  IS_TELEGRAM_SERVICES_ENABLED, MEMBERS_SLICE, PROFILE_POLLS_SLICE, PROFILE_SENSITIVE_AREA, SHARED_MEDIA_SLICE,
+  MEMBERS_SLICE, PROFILE_POLLS_SLICE, PROFILE_SENSITIVE_AREA, SHARED_MEDIA_SLICE,
   SLIDE_TRANSITION_DURATION,
 } from '../../config';
 import {
@@ -1521,10 +1521,8 @@ export default memo(withGlobal<OwnProps>(
     const hasPreviewMediaTab = userFullInfo?.botInfo?.hasPreviewMedia;
     const botPreviewMedia = global.users.previewMediaByBotId[chatId];
 
-    // Stories are a Telegram service with no Matrix counterpart
-    const hasStoriesTab = IS_TELEGRAM_SERVICES_ENABLED && peer
-      && (user?.isSelf || (!peer.areStoriesHidden && peerFullInfo?.hasPinnedStories))
-      && !isSavedMessages;
+    // People with the blue tick post stories; the ones they keep show in their profile's Posts tab
+    const hasStoriesTab = peer && user?.isVerified && !isSavedMessages;
     const peerStories = hasStoriesTab ? selectPeerStories(global, peer.id) : undefined;
     const selectedStoryAlbumId = selectActiveStoriesCollectionId(global);
     const storyIds = selectedStoryAlbumId !== 'all'

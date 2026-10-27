@@ -1,0 +1,45 @@
+.root :global(.modal-dialog) {
+  max-width: 24rem;
+}
+
+.input {
+  display: none;
+}
+
+.picker,
+.preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0;
+  border: none;
+  border-radius: 1rem;
+
+  font: inherit;
+  color: var(--color-primary);
+
+  background-color: var(--color-background-secondary);
+}
+
+.picker {
+  height: 10rem;
+  font-weight: var(--font-weight-medium);
+  border: 2px dashed var(--color-borders);
+}
+
+// Stories are vertical, like on phones
+.preview {
+  overflow: hidden;
+  height: 22rem;
+  background-color: #000;
+
+  img,
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}

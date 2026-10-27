@@ -120,6 +120,17 @@ addActionHandler('closeServerAdminModal', (global, actions, payload): ActionRetu
   return updateTabState(global, { serverAdminModal: undefined }, tabId);
 });
 
+// People with the blue tick post stories from this window
+addActionHandler('openStoryComposerModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  return updateTabState(global, { storyComposerModal: {} }, tabId);
+});
+
+addActionHandler('closeStoryComposerModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  return updateTabState(global, { storyComposerModal: undefined }, tabId);
+});
+
 addActionHandler('closeEncryptionRecoveryModal', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
   return updateTabState(global, { encryptionRecoveryModal: undefined }, tabId);
