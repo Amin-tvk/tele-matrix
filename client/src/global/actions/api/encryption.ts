@@ -38,16 +38,13 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
   const status = await callApi('fetchEncryptionStatus');
   if (!status?.isAvailable) return;
   // A recovery key can't help a device whose keys were lost; it needs a new sign-in instead
+  // Opened right away: until the next sign-in, new messages can't be read on this device
   if (status.isDeviceBroken) {
     lastPromptAt = Date.now();
-    actions.showNotification({
-      message: { key: 'MatrixDeviceBrokenPrompt' },
-      actionText: { key: 'MatrixDeviceBrokenAction' },
-      action: { action: 'openEncryptionRecoveryModal', payload: { tabId: getCurrentTabId() } },
-      duration: RECOVERY_PROMPT_DURATION,
-      icon: 'lock',
-      tabId: getCurrentTabId(),
-    });
+    global = getGlobal();
+    if (!selectTabState(global).encryptionRecoveryModal) {
+      actions.openEncryptionRecoveryModal({ tabId: getCurrentTabId() });
+    }
     return;
   }
   const mode = getRecoveryMode(status);

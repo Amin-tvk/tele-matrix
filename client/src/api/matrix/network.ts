@@ -23,14 +23,32 @@ function getRequestDeadline(url: URL) {
   return undefined;
 }
 
+let keyUploadConflictHandler: NoneToVoidFunction | undefined;
+
+export function setKeyUploadConflictHandler(handler: NoneToVoidFunction) {
+  keyUploadConflictHandler = handler;
+}
+
+// The server refuses one-time keys of this device when it still holds different ones under the same IDs
+function watchKeyUpload(response: Response) {
+  if (response.status !== 400 || !keyUploadConflictHandler) return response;
+  response.clone().text().then((text) => {
+    if (/One time key .* already exists/.test(text)) keyUploadConflictHandler?.();
+  }).catch(() => undefined);
+  return response;
+}
+
 export const fetchWithDeadline: typeof fetch = (input, init) => {
   let deadline: number | undefined;
+  let url: URL | undefined;
   try {
-    deadline = getRequestDeadline(new URL(input instanceof Request ? input.url : String(input)));
+    url = new URL(input instanceof Request ? input.url : String(input));
+    deadline = getRequestDeadline(url);
   } catch {
     deadline = undefined;
   }
 
+  if (url?.pathname.endsWith('/keys/upload')) return fetch(input, init).then(watchKeyUpload);
   if (!deadline) return fetch(input, init);
 
   const controller = new AbortController();

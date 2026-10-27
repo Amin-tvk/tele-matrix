@@ -41,14 +41,14 @@ import {
 import {
   INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, QUICK_REACTION_EVENT, SYNC_POLL_TIMEOUT_MS,
 } from './constants';
-import { cacheSecretStorageKeyCallback, getSecretStorageKeyCallback } from './encryption';
+import { cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict } from './encryption';
 import { handleFoldersAccountData } from './folders';
 import {
   findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
   isUserPeerId,
 } from './ids';
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
-import { fetchWithDeadline } from './network';
+import { fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { buildSessionData, setSession } from './session';
 import {
   clearStore, getValue, loadStore, setStoreName, setValue,
@@ -122,6 +122,7 @@ export async function startClient(session: MatrixSession, isFreshLogin?: boolean
     dbName: `peyvand-sync:${session.userId}`,
   });
 
+  setKeyUploadConflictHandler(handleKeyUploadConflict);
   client = createClient({
     baseUrl: session.homeserver,
     accessToken: session.accessToken,

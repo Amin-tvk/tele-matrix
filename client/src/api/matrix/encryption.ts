@@ -5,7 +5,10 @@ import { decodeRecoveryKey } from 'matrix-js-sdk/lib/crypto-api/recovery-key';
 import type { SecretStorageKeyDescription } from 'matrix-js-sdk/lib/secret-storage';
 
 import { DEBUG } from '../../config';
-import { getClient, getMyUserId, hasClient, waitForSync } from './client';
+import {
+  getClient, getMyUserId, hasClient, onUpdate, waitForSync,
+} from './client';
+import { getValue, setValue } from './store';
 
 // Recovery of end-to-end encryption keys from the account's server-side backup.
 // The recovery key (or passphrase) unlocks secret storage, which holds the cross-signing
@@ -99,6 +102,8 @@ type KeysQueryResponse = {
 };
 
 let deviceCheck: { deviceId: string; isBroken: boolean } | undefined;
+// Remembered, as the signs of a lost store go away once its old one-time keys are cleared
+const BROKEN_DEVICE_KEY = 'broken-device';
 
 // A device whose local crypto store was lost and recreated keeps its device ID but gets new keys.
 // The server refuses to replace the published ones, so other people keep encrypting for the lost keys
@@ -108,6 +113,7 @@ async function checkIsDeviceBroken() {
   const deviceId = client.getDeviceId();
   const crypto = client.getCrypto();
   if (!deviceId || !crypto) return false;
+  if (getValue(BROKEN_DEVICE_KEY) === deviceId) return true;
   if (deviceCheck?.deviceId === deviceId) return deviceCheck.isBroken;
 
   try {
@@ -124,6 +130,60 @@ async function checkIsDeviceBroken() {
     return deviceCheck.isBroken;
   } catch {
     return false;
+  }
+}
+
+type KeysClaimResponse = {
+  one_time_keys?: Record<string, Record<string, Record<string, { fallback?: boolean }>>>;
+};
+
+// Each claim takes one key off the server; Synapse holds at most 100 per device
+const MAX_STALE_KEY_CLAIMS = 150;
+// The SDK retries a refused upload every few seconds; one cleanup covers many of them
+const STALE_KEYS_RETRY_MS = 60000;
+
+let isClearingStaleKeys = false;
+let lastStaleKeysClearAt = 0;
+
+// A device whose crypto store was recreated under the same device ID gets new identity keys, which
+// the server accepts, but its one-time keys from before stay there under the same IDs, so its uploads
+// of new ones are refused. People who already knew the device keep its old keys (their apps refuse a
+// changed identity under the same device ID), so their messages can never be read here again.
+// Only signing in again, as a new device, fixes that
+export function handleKeyUploadConflict() {
+  const deviceId = getClient().getDeviceId();
+  if (!deviceId) return;
+  if (getValue(BROKEN_DEVICE_KEY) !== deviceId) {
+    setValue(BROKEN_DEVICE_KEY, deviceId);
+    deviceCheck = { deviceId, isBroken: true };
+    onUpdate({ '@type': 'updateEncryptionKeysMissing' });
+  }
+  void clearStaleOneTimeKeys();
+}
+
+// Claiming the old keys away stops the refused uploads, which the SDK would otherwise repeat forever
+async function clearStaleOneTimeKeys() {
+  if (isClearingStaleKeys || Date.now() - lastStaleKeysClearAt < STALE_KEYS_RETRY_MS) return;
+  isClearingStaleKeys = true;
+  lastStaleKeysClearAt = Date.now();
+
+  const client = getClient();
+  const userId = getMyUserId();
+  const deviceId = client.getDeviceId();
+  try {
+    if (!deviceId) return;
+    for (let i = 0; i < MAX_STALE_KEY_CLAIMS; i++) {
+      const response = await client.http.authedRequest<KeysClaimResponse>(Method.Post, '/keys/claim', undefined, {
+        one_time_keys: { [userId]: { [deviceId]: 'signed_curve25519' } },
+      });
+      const key = Object.values(response.one_time_keys?.[userId]?.[deviceId] || {})[0];
+      // Only the fallback key is left once the one-time keys are gone; the SDK replaces it with its next upload
+      if (!key || key.fallback) break;
+    }
+  } catch (err) {
+    if (DEBUG) console.warn('[matrix] Clearing stale one-time keys failed', err);
+  } finally {
+    isClearingStaleKeys = false;
   }
 }
 

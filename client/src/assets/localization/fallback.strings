@@ -4472,7 +4472,6 @@
 "MatrixRecoveryErrorNoBackup" = "There is no key backup on this account";
 "MatrixRecoveryErrorUnknown" = "Something went wrong, please try again";
 "MatrixRecoveryPrompt" = "Enter your recovery key to read your encrypted messages on this device.";
-"MatrixDeviceBrokenPrompt" = "Encryption on this device stopped working. Sign in again to fix it.";
 "MatrixDeviceBrokenAction" = "Sign Out";
 "MatrixDeviceBrokenTitle" = "Fix Encryption";
 "MatrixDeviceBrokenDescription" = "This device lost its encryption keys, so new encrypted messages can't reach it, and entering your recovery key won't help. Sign out and sign in again: the new sign-in gets fresh keys, and your recovery key brings back your older messages.";

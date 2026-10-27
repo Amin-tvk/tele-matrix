@@ -3352,7 +3352,6 @@ export interface LangPair {
   'MatrixRecoveryErrorNoBackup': undefined;
   'MatrixRecoveryErrorUnknown': undefined;
   'MatrixRecoveryPrompt': undefined;
-  'MatrixDeviceBrokenPrompt': undefined;
   'MatrixDeviceBrokenAction': undefined;
   'MatrixDeviceBrokenTitle': undefined;
   'MatrixDeviceBrokenDescription': undefined;
