@@ -48,6 +48,7 @@ import {
   selectUserFullInfo,
 } from '../../global/selectors';
 import { isUserId } from '../../util/entities/ids';
+import { callApi } from '../../api/gramjs';
 import { disableScrolling } from '../../util/scrollLock';
 import { buildAutoDeletePeriodOptions, DEFAULT_AUTO_DELETE_PERIODS } from '../common/helpers/autoDeletePeriods';
 
@@ -264,6 +265,23 @@ const HeaderMenuContainer = ({
   const closeMuteModal = useLastCallback(() => {
     setIsMuteModalOpen(false);
     onClose();
+  });
+
+  // Server admins give and take blue ticks of people and channels
+  const [isServerAdmin, setIsServerAdmin] = useState(false);
+  const canSetVerified = isServerAdmin && !isChatWithSelf && !isBot && (isPrivate || isChannel);
+  useEffect(() => {
+    if (!isOpen) return;
+    void callApi('fetchIsServerAdmin').then((result) => setIsServerAdmin(Boolean(result)));
+  }, [isOpen]);
+
+  const handleToggleVerified = useLastCallback(async () => {
+    const isVerified = !chat?.isVerified;
+    onClose();
+    const result = await callApi('setPeerVerified', { peer: { id: chatId }, isVerified });
+    showNotification({
+      message: { key: result ? (isVerified ? 'PeyvandVerifiedGiven' : 'PeyvandVerifiedRemoved') : 'SomethingWentWrong' },
+    });
   });
 
   const handleReport = useLastCallback(() => {
@@ -861,6 +879,14 @@ const HeaderMenuContainer = ({
               onClick={handleEnableTranslations}
             >
               {lang('AiMessageEditorTranslate')}
+            </MenuItem>
+          )}
+          {canSetVerified && (
+            <MenuItem
+              icon={chat?.isVerified ? 'close-circle' : 'check-filled'}
+              onClick={handleToggleVerified}
+            >
+              {lang(chat?.isVerified ? 'PeyvandVerifiedRemove' : 'PeyvandVerifiedGive')}
             </MenuItem>
           )}
           {canReportChat && (

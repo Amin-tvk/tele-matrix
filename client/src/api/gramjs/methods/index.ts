@@ -12,6 +12,7 @@ export { fetchMatrixCallIceServers, sendMatrixCallEvent } from '../../matrix/cal
 export {
   acceptDeviceVerification, cancelDeviceVerification, confirmDeviceVerification, requestDeviceVerification,
 } from '../../matrix/verification';
+export { setMyBadgeEmoji, setPeerVerified } from '../../matrix/verifiedBadges';
 export {
   createAdminInvite, createAdminUser, deleteAdminInvite, fetchAdminInvites, fetchAdminUsers, fetchIsServerAdmin,
   logoutUserDevices, resetUserPassword, setUserDeactivated, setUserServerAdmin,

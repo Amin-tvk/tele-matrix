@@ -17,6 +17,7 @@ import * as methods from './methods';
 import { parseSessionData } from './session';
 import * as stubs from './stubs';
 import * as verification from './verification';
+import { setMyBadgeEmoji, setPeerVerified } from './verifiedBadges';
 
 const LOGOUT_TIMEOUT_MS = 2500;
 
@@ -51,6 +52,8 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...folders,
   ...lastSeen,
   ...verification,
+  setPeerVerified,
+  setMyBadgeEmoji,
   destroy,
   disconnect,
   restartAuth,

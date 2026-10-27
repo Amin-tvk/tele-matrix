@@ -16,7 +16,9 @@ export interface ApiUser {
   id: string;
   isMin: boolean;
   isSelf?: true;
-  isVerified?: true;
+  isVerified?: boolean;
+  // An emoji an approved person shows instead of the blue tick; empty when none
+  badgeEmoji?: string;
   isPremium?: boolean;
   isCloseFriend?: boolean;
   isContact?: true;

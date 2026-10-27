@@ -154,7 +154,7 @@ const FullNameTitle = ({
       </h3>
       {!iconElement && peer && (
         <>
-          {!noVerified && peer?.isVerified && <VerifiedIcon />}
+          {!noVerified && peer?.isVerified && <VerifiedIcon emoji={isUser ? realPeer.badgeEmoji : undefined} />}
           {!noFake && peer?.fakeType && <FakeIcon fakeType={peer.fakeType} />}
           {canShowEmojiStatus && emojiStatus && (
             <Transition

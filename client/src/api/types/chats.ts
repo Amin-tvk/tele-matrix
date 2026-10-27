@@ -38,7 +38,7 @@ export interface ApiChat {
   folderId?: number;
   type: ApiChatType;
   title: string;
-  isVerified?: true;
+  isVerified?: boolean;
   areSignaturesShown?: boolean;
   areProfilesShown?: boolean;
   isLinkedInDiscussion?: boolean;

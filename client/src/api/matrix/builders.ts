@@ -36,6 +36,7 @@ import {
 } from './ids';
 import { getEncryptedFileMediaId } from './media';
 import { buildTodoMedia } from './todo';
+import { getBadgeEmoji, isVerifiedId } from './verifiedState';
 
 export const POWER_LEVEL_ADMIN = 50;
 export const POWER_LEVEL_OWNER = 100;
@@ -78,6 +79,9 @@ export function buildApiUser(
     avatarPhotoId: avatarUrl ? encodeMxc(avatarUrl) : undefined,
     isSelf: userId === myUserId ? true : undefined,
     isContact: isContact ? true : undefined,
+    // Sent as `false` too, so taking the tick away reaches the UI
+    isVerified: isVerifiedId(userId),
+    badgeEmoji: getBadgeEmoji(userId) || '',
   });
 }
 
@@ -190,6 +194,7 @@ export function buildApiChatFromRoom(
       creationDate: createEvent ? Math.floor(createEvent.getTs() / 1000) : undefined,
       folderId: isArchived ? 1 : undefined,
       isListed: true,
+      isVerified: isVerifiedId(dmUserId),
     });
   }
 
@@ -218,6 +223,7 @@ export function buildApiChatFromRoom(
     areSignaturesShown: isChannel ? true : undefined,
     folderId: isArchived ? 1 : undefined,
     isListed: true,
+    isVerified: isVerifiedId(room.roomId),
   });
 }
 

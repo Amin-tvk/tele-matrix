@@ -4564,3 +4564,9 @@
 "PasscodeOfferTitle" = "Protect Tele with a Passcode?";
 "PasscodeOfferText" = "Set a passcode to lock the app on this device. Tele locks itself when you're away, and you can lock it any time from the lock icon above the chat list. You can change this later in Settings > Privacy and Security > Passcode Lock.";
 "PasscodeOfferSetUp" = "Set Passcode";
+"PeyvandVerifiedGive" = "Give Blue Tick";
+"PeyvandVerifiedRemove" = "Remove Blue Tick";
+"PeyvandVerifiedGiven" = "Blue tick given";
+"PeyvandVerifiedRemoved" = "Blue tick removed";
+"PeyvandBadgeTitle" = "Verified Badge";
+"PeyvandBadgeDescription" = "Your account is verified. Choose whether the blue tick or an emoji appears next to your name.";

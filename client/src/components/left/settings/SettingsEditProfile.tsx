@@ -43,6 +43,7 @@ import Link from '../../ui/Link';
 import ListItem from '../../ui/ListItem';
 import TextArea from '../../ui/TextArea';
 import Chat from '../main/Chat';
+import VerifiedBadgePicker from './VerifiedBadgePicker';
 
 import styles from './SettingsEditProfile.module.scss';
 
@@ -388,6 +389,8 @@ const SettingsEditProfile = ({
             ),
           }, { withNodes: true })}
         </IslandDescription>
+
+        <VerifiedBadgePicker />
 
         <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('Username')}</IslandTitle>
         <Island>

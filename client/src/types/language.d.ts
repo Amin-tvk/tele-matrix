@@ -3361,6 +3361,12 @@ export interface LangPair {
   'PasscodeOfferTitle': undefined;
   'PasscodeOfferText': undefined;
   'PasscodeOfferSetUp': undefined;
+  'PeyvandVerifiedGive': undefined;
+  'PeyvandVerifiedRemove': undefined;
+  'PeyvandVerifiedGiven': undefined;
+  'PeyvandVerifiedRemoved': undefined;
+  'PeyvandBadgeTitle': undefined;
+  'PeyvandBadgeDescription': undefined;
   'MatrixVerifyIncomingTitle': undefined;
   'MatrixVerifyWaiting': undefined;
   'MatrixVerifyIncoming': undefined;

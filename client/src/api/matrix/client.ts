@@ -48,6 +48,7 @@ import {
 } from './encryption';
 import { handleFoldersAccountData } from './folders';
 import { handleReactionUsageAccountData } from './reactionUsage';
+import { startVerifiedBadgesPolling } from './verifiedBadges';
 import {
   findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
   isUserPeerId,
@@ -726,6 +727,7 @@ function handleSync(state: SyncState, prevState: SyncState | null) {
     getVisibleRooms().forEach(rememberReactionTargets);
     autoJoinInvites();
     startLastSeenPolling();
+    startVerifiedBadgesPolling();
     syncDeferred.resolve();
     // The config may have been loaded before the account data arrived
     onUpdate({ '@type': 'updateConfig' });
