@@ -104,6 +104,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateRecentReactions':
       actions.loadRecentReactions();
+      actions.loadTopReactions();
       break;
 
     case 'updateRecentEmojiStatuses':

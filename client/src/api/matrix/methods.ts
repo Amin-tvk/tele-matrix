@@ -104,6 +104,7 @@ import {
   isUserPeerId,
 } from './ids';
 import { uploadContent, uploadFile } from './media';
+import { recordReactionUsage } from './reactionUsage';
 import { retryOnNetworkError } from './retry';
 import { buildTodoContent, buildTodoUpdateContent, TODO_UPDATE_EVENT } from './todo';
 
@@ -1625,6 +1626,7 @@ export async function sendReaction({
         'm.relates_to': { rel_type: RelationType.Annotation, event_id: eventId, key: toMatrixKey(key) },
       } as never)),
   ]);
+  recordReactionUsage([...wantedKeys].filter((key) => !existingKeys.has(key)));
   return true;
 }
 

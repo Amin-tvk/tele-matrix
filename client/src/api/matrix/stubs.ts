@@ -5,6 +5,7 @@ import type {
 import { DEFAULT_APP_CONFIG } from '../../limits';
 import { getClient, hasClient } from './client';
 import { QUICK_REACTION_EVENT } from './constants';
+import { getRecentReactions, getTopReactions } from './reactionUsage';
 
 // Methods that have no Matrix counterpart but whose callers expect a defined result
 
@@ -107,12 +108,13 @@ function buildReactionList(count = REACTION_EMOJIS.length) {
   };
 }
 
+// The order changes as reactions are used, so no hash is kept that could make the client skip the refresh
 export function fetchTopReactions() {
-  return Promise.resolve(buildReactionList(TOP_REACTION_COUNT));
+  return Promise.resolve({ hash: '', reactions: getTopReactions(REACTION_EMOJIS) });
 }
 
 export function fetchRecentReactions() {
-  return Promise.resolve(buildReactionList(TOP_REACTION_COUNT));
+  return Promise.resolve({ hash: '', reactions: getRecentReactions(REACTION_EMOJIS, TOP_REACTION_COUNT) });
 }
 
 export function fetchDefaultTagReactions() {

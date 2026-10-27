@@ -47,6 +47,7 @@ import {
   cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict, markDeviceBroken,
 } from './encryption';
 import { handleFoldersAccountData } from './folders';
+import { handleReactionUsageAccountData } from './reactionUsage';
 import {
   findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
   isUserPeerId,
@@ -1079,6 +1080,7 @@ function handleAccountData(event: MatrixEvent) {
   if (isSyncPrepared) handleFoldersAccountData(event);
   // The config holds the quick reaction, which may have been changed on another device
   if (isSyncPrepared && event.getType() === QUICK_REACTION_EVENT) onUpdate({ '@type': 'updateConfig' });
+  if (isSyncPrepared) handleReactionUsageAccountData(event);
   if (event.getType() !== EventType.Direct || !isSyncPrepared) return;
   if (computeDirectRooms()) {
     getVisibleRooms().forEach((room) => announceChat(room, true));
