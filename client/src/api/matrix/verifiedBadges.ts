@@ -19,7 +19,7 @@ import {
 const REGISTRY_ALIAS_LOCALPART = 'peyvand-verified';
 const VERIFIED_EVENT = 'im.peyvand.verified';
 const BADGE_PROFILE_FIELD = 'im.peyvand.badge';
-const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const REGISTRY_ROOM_VERSION = '11';
 const ADMIN_POWER_LEVEL = 100;
 // Rooms only let a user write state keys starting with "@" when the key is their own ID, so keys get a prefix.
