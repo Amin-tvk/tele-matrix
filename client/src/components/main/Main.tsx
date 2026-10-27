@@ -508,6 +508,8 @@ const Main = ({
     if (prevIsLeftColumnOpen === undefined || isLeftColumnOpen === prevIsLeftColumnOpen || !withInterfaceAnimations) {
       return;
     }
+    // Swipe back already moved the columns, and no transition will run to end the animation
+    if (shouldSkipHistoryAnimations) return;
 
     willAnimateLeftColumnRef.current = true;
 
@@ -524,7 +526,7 @@ const Main = ({
       willAnimateLeftColumnRef.current = false;
       forceUpdate();
     });
-  }, [isLeftColumnOpen, withInterfaceAnimations, forceUpdate]);
+  }, [isLeftColumnOpen, withInterfaceAnimations, shouldSkipHistoryAnimations, forceUpdate]);
 
   useShowTransition({
     ref: containerRef,

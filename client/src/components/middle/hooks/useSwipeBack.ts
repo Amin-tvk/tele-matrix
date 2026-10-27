@@ -1,5 +1,6 @@
 import type { ElementRef } from '../../../lib/teact/teact';
 import { useEffect } from '../../../lib/teact/teact';
+import { getActions } from '../../../global';
 
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 
@@ -21,6 +22,9 @@ const LIST_PARALLAX_SHIFT = 0.3;
 const LIST_MAX_DIM_OPACITY = 0.25;
 // Without the chat list behind, the chat only moves a little to show the gesture is recognized
 const PARTIAL_SHIFT_RATIO = 0.3;
+// The chat closes on the next render; the swipe keeps the columns in place until then
+const HANDOFF_MAX_FRAMES = 30;
+const SWIPING_CLASS = 'swipe-back-active';
 // Gestures that start on these keep their own meaning: inputs, seeking, horizontal scrolling and selection
 const EXCLUDED_SELECTOR = [
   'input', 'textarea', '[contenteditable]', '.Composer', '.no-word-wrap', 'pre', 'code',
@@ -69,6 +73,8 @@ export default function useSwipeBack({
 
       const leftColumn = shouldRevealList ? getLeftColumn() : undefined;
       if (leftColumn) {
+        // Its own dimming would stay on top of the swipe's and fade out again after it
+        leftColumn.classList.add(SWIPING_CLASS);
         leftColumn.style.transition = transition;
         leftColumn.style.transform = `translate3d(${-LIST_PARALLAX_SHIFT * (1 - progress) * 100}%, 0, 0)`;
 
@@ -89,8 +95,29 @@ export default function useSwipeBack({
         element.style.transform = '';
         element.style.boxShadow = '';
       });
+      getLeftColumn()?.classList.remove(SWIPING_CLASS);
       dimLayer?.remove();
       dimLayer = undefined;
+    };
+
+    // Once the chat is closed, the columns' classes put them where the swipe left them.
+    // Waits for that, so the chat doesn't jump back and play the close animation a second time
+    const handOffWhenClosed = (framesLeft = HANDOFF_MAX_FRAMES) => {
+      const isClosed = document.getElementById('Main')?.classList.contains('left-column-open');
+      if (!isClosed && framesLeft > 0) {
+        requestAnimationFrame(() => handOffWhenClosed(framesLeft - 1));
+        return;
+      }
+      clearOffset();
+      [middleColumn, getLeftColumn()].forEach((element) => {
+        if (element) element.style.transition = 'none';
+      });
+      requestAnimationFrame(() => {
+        [middleColumn, getLeftColumn()].forEach((element) => {
+          if (element) element.style.transition = '';
+        });
+        isSettling = false;
+      });
     };
 
     const settle = (offset: number, velocity: number, onDone?: NoneToVoidFunction) => {
@@ -102,12 +129,15 @@ export default function useSwipeBack({
       )));
       applyOffset(offset, duration);
       setTimeout(() => {
-        onDone?.();
-        // The columns take over from their own classes in the same frame
-        requestAnimationFrame(() => {
-          clearOffset();
-          isSettling = false;
-        });
+        if (onDone) {
+          // The swipe already played the transition
+          getActions().disableHistoryAnimations();
+          onDone();
+          requestAnimationFrame(() => handOffWhenClosed());
+          return;
+        }
+        clearOffset();
+        isSettling = false;
       }, duration);
     };
 

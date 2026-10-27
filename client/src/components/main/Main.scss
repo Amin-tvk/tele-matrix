@@ -304,3 +304,9 @@
     }
   }
 }
+
+// Swipe back on phones dims the chat list itself, in step with the finger
+#LeftColumn.swipe-back-active::after {
+  opacity: 0 !important;
+  transition: none !important;
+}
