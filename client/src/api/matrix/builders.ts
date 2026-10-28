@@ -43,6 +43,7 @@ import {
   encodeMxc, findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId,
 } from './ids';
 import { getEncryptedFileMediaId, markGifMedia } from './media';
+import { addMentionEntities } from './mentions';
 import { getRoomTtlSeconds, isExpiredEvent, RETENTION_EVENT } from './retention';
 import { buildApiSticker, PACK_KEY, STICKER_MARKER } from './stickersState';
 import { FORWARDED_STORY_KEY, getStoriesSummary, STORY_REPLY_KEY } from './storiesState';
@@ -586,6 +587,23 @@ function isCreationSetupEvent(event: MatrixEvent, room?: Room) {
     && event.getContent().membership === 'join';
 }
 
+// A channel post's views: the author and every member whose read receipt is at this post or a later one.
+// Only real receipts count: the SDK's own checks also treat joining after a post as having read it
+export function countPostViews(room: Room, event: MatrixEvent) {
+  const eventId = event.getId();
+  if (!eventId) return 1;
+  const timelineSet = room.getUnfilteredTimelineSet();
+  const views = room.getJoinedMembers().filter(({ userId }) => {
+    if (userId === event.getSender()) return true;
+    const readUpTo = room.getEventReadUpTo(userId, true);
+    if (!readUpTo) return false;
+    if (readUpTo === eventId) return true;
+    const order = timelineSet.compareEventOrdering(readUpTo, eventId);
+    return order !== null && order > 0;
+  }).length;
+  return Math.max(views, 1);
+}
+
 export function isDisplayableEvent(
   event: MatrixEvent, context: Pick<ChatContext, 'isPrivate' | 'withComments'>, room?: Room,
 ) {
@@ -717,7 +735,9 @@ export function buildApiMessage(
   }
 
   if (content.text) {
-    content.text = addTimestampEntities({ ...content.text, emojiOnlyCount: undefined });
+    content.text = addMentionEntities(
+      addTimestampEntities({ ...content.text, emojiOnlyCount: undefined }), room.roomId, eventId,
+    );
   }
 
   const id = getMessageId(room.roomId, eventId, event.getTs());
@@ -744,6 +764,7 @@ export function buildApiMessage(
     editDate: replacingEvent ? Math.floor(replacingEvent.getTs() / 1000) : undefined,
     isForwardingAllowed: true,
     reactions: !isState ? buildReactions(room, event, context) : undefined,
+    viewsCount: context.isChannel && !isState && !commentRootId ? countPostViews(room, event) : undefined,
     isMentioned: !isState && sender !== context.myUserId && isMentioningUser(event, context.myUserId)
       ? true : undefined,
   });

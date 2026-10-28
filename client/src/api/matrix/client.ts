@@ -35,6 +35,7 @@ import {
   buildApiMessage,
   buildApiUser,
   buildReactions,
+  countPostViews,
   getMemberTag,
   getReplyTargetEventId,
   isDisplayableEvent,
@@ -1134,6 +1135,20 @@ function handleRedaction(event: MatrixEvent, room: Room) {
   }
 }
 
+const VIEWS_UPDATE_POSTS = 50;
+
+// Someone read up to a point in a channel: the latest posts get their new view counts
+function announcePostViews(room: Room, chatId: string) {
+  room.getLiveTimeline().getEvents().slice(-VIEWS_UPDATE_POSTS).forEach((post) => {
+    const postId = post.getId();
+    const messageId = postId ? findMessageId(postId) : undefined;
+    if (!messageId || post.isState() || isCommentEvent(post)) return;
+    onUpdate({
+      '@type': 'updateMessage', chatId, id: messageId, message: { viewsCount: countPostViews(room, post) },
+    });
+  });
+}
+
 function handleReceipt(event: MatrixEvent, room: Room) {
   if (!isSyncPrepared || !isRoomVisible(room)) return;
   const content = event.getContent() as Record<string, Record<string, Record<string, unknown>>>;
@@ -1145,6 +1160,7 @@ function handleReceipt(event: MatrixEvent, room: Room) {
   });
 
   const chatId = getChatIdForRoom(room);
+  if (isRoomChannel(room)) announcePostViews(room, chatId);
   const readState: Record<string, number | undefined> = {};
   if (readers.has(myUserId)) {
     readState.lastReadInboxMessageId = getReadUpToMessageId(room, myUserId);

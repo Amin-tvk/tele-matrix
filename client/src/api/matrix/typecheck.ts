@@ -21,7 +21,7 @@ type TruthyResultMethods = 'deleteChatMember' | 'leaveChannel' | 'deleteChatUser
   | 'editMessage' | 'fetchFullUser' | 'registerDevice' | 'unregisterDevice'
   | 'updateNotificationSettings' | 'sortChatFolders' | 'toggleDialogFilterTags' | 'deleteChatFolder'
   | 'editChatFolder' | 'editTodo' | 'toggleTodoCompleted' | 'appendTodoList' | 'deleteStory' | 'markStoryRead'
-  | 'toggleStoryInProfile';
+  | 'toggleStoryInProfile' | 'fetchMessageViews';
 type Overlap = Exclude<Extract<keyof Implementations, keyof Methods>, TruthyResultMethods>;
 
 type CheckedMethods = {

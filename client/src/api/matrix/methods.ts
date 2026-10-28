@@ -51,6 +51,7 @@ import {
   buildApiChatMember,
   buildApiUser,
   buildApiUserStatus,
+  countPostViews,
   getLocalpart,
   getMemberTag,
   getReplyTargetEventId,
@@ -1564,6 +1565,18 @@ function buildSentEvent(room: Room, eventId: string, type: string, content: Reco
     room_id: room.roomId,
     origin_server_ts: Date.now(),
   });
+}
+
+// Views of channel posts come from read receipts, which reach every member, so they are counted here
+export function fetchMessageViews({ chat, ids }: { chat: ApiChat; ids: number[]; shouldIncrement?: boolean }) {
+  const room = requireRoom(chat);
+  if (!room || !isRoomChannel(room)) return Promise.resolve(undefined);
+  const viewsInfo = ids.flatMap((id) => {
+    const eventId = getEventIdForMessage(room, id);
+    const event = eventId ? room.findEventById(eventId) : undefined;
+    return event ? [{ id, views: countPostViews(room, event) }] : [];
+  });
+  return Promise.resolve({ viewsInfo });
 }
 
 // Auto-delete: the room's retention policy; the server needs `retention` enabled to purge old messages
