@@ -116,11 +116,14 @@ import {
 } from './ids';
 import { uploadContent, uploadFile } from './media';
 import { recordReactionUsage } from './reactionUsage';
+import { RETENTION_EVENT } from './retention';
 import { retryOnNetworkError } from './retry';
+import { scheduleRoomEvent } from './scheduled';
 import { addRecentSticker } from './stickers';
 import {
   findPackImage, getShortNameBySetId, LOTTIE_MIME, PACK_KEY, STICKER_MARKER, VIDEO_STICKER_MIME,
 } from './stickersState';
+import { FORWARDED_STORY_KEY, getUserStories, STORY_REPLY_KEY } from './storiesState';
 import { buildTodoContent, buildTodoUpdateContent, TODO_UPDATE_EVENT } from './todo';
 
 const WINDOW_PAGE_SIZE = 50;
@@ -1386,6 +1389,7 @@ export function sendMessageLocal(params: SendMessageParams) {
   const formattedText = text ? addTimestampEntities({ text, entities, emojiOnlyCount: undefined }) : undefined;
   const replyToMsgId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
   const replyToTopId = replyInfo?.type === 'message' ? replyInfo.replyToTopId : undefined;
+  const { scheduledAt } = params;
 
   const message: ApiMessage = omitUndefined<ApiMessage>({
     id: getNextLocalMessageId(lastMessageId || Date.now()),
@@ -1397,10 +1401,12 @@ export function sendMessageLocal(params: SendMessageParams) {
       video: gif || media?.video,
       todo: todo ? { mediaType: 'todo' as const, todo: todo.todo } : undefined,
     }),
-    date: getServerTime(),
+    date: scheduledAt || getServerTime(),
+    isScheduled: scheduledAt ? true : undefined,
     isOutgoing: chat.type !== 'chatTypeChannel',
     senderId: getMyPeerId(),
-    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : undefined,
+    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId }
+      : replyInfo?.type === 'story' ? { type: 'story', peerId: replyInfo.peerId, storyId: replyInfo.storyId } : undefined,
     groupedId,
     isInAlbum: groupedId && media && (media.photo || media.video) ? true : undefined,
     isForwardingAllowed: true,
@@ -1412,7 +1418,7 @@ export function sendMessageLocal(params: SendMessageParams) {
   if (emojiOnlyCount && message.content.text) message.content.text.emojiOnlyCount = emojiOnlyCount;
 
   onUpdate({
-    '@type': 'newMessage',
+    '@type': scheduledAt ? 'newScheduledMessage' : 'newMessage',
     id: message.id,
     chatId: chat.id,
     message,
@@ -1552,6 +1558,34 @@ function buildSentEvent(room: Room, eventId: string, type: string, content: Reco
   });
 }
 
+// Auto-delete: the room's retention policy; the server needs `retention` enabled to purge old messages
+export async function setHistoryTtl({ peer, period }: { peer: ApiPeer; period: number }) {
+  const existing = getRoomByChatId(peer.id);
+  const room = existing || (isUserPeerId(peer.id)
+    ? await ensureRoomForChat({ id: peer.id, type: 'chatTypePrivate', title: '' }) : undefined);
+  if (!room) return undefined;
+  await getClient().sendStateEvent(
+    room.roomId, RETENTION_EVENT as never, (period > 0 ? { max_lifetime: period * 1000 } : {}) as never, '',
+  );
+  onUpdate({ '@type': 'updatePeerHistoryTtl', id: peer.id, ttlPeriod: period > 0 ? period : undefined });
+  return true;
+}
+
+// A forwarded story is sent as its picture or video, marked with the story so Tele opens the story itself
+function buildForwardedStoryContent(
+  story: { id: number; peerId: string }, text: string | undefined, entities: ApiMessageEntity[] | undefined, room: Room,
+): Record<string, unknown> {
+  const ownerId = getUserIdByPeerId(story.peerId);
+  const stored = ownerId ? getUserStories(ownerId).find(({ id }) => id === story.id) : undefined;
+  const caption = text ? buildTextContent(text, entities, room) : undefined;
+  return {
+    ...(stored?.content || { msgtype: MsgType.Text }),
+    body: caption?.body || (stored ? 'Story' : 'A story'),
+    ...(caption?.formatted_body && { format: caption.format, formatted_body: caption.formatted_body }),
+    [FORWARDED_STORY_KEY]: { user_id: ownerId, story_id: story.id },
+  };
+}
+
 // A sticker from a pack goes with the pack's details; one seen only in a message is rebuilt from what the UI has
 function buildStickerContent(sticker: ApiSticker): Record<string, unknown> {
   const found = findPackImage(sticker.id);
@@ -1607,6 +1641,8 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
       }
     } else if (params.sticker) {
       content = buildStickerContent(params.sticker);
+    } else if (params.story) {
+      content = buildForwardedStoryContent(params.story, text, entities, room);
     } else if (params.gif) {
       return undefined;
     } else if (params.todo) {
@@ -1622,6 +1658,10 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
     const isCommentOnPost = isComment && replyToMsgId === (
       (replyInfo?.type === 'message' && replyInfo.replyToTopId) || replyToMsgId
     );
+    if (replyInfo?.type === 'story') {
+      const ownerId = getUserIdByPeerId(replyInfo.peerId);
+      if (ownerId) content[STORY_REPLY_KEY] = { user_id: ownerId, story_id: replyInfo.storyId };
+    }
     if (replyEventId && !isCommentOnPost) {
       content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyEventId } };
       // Like in Telegram, the author of the replied message gets notified
@@ -1649,6 +1689,15 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
     }
     const eventType = isComment ? COMMENT_EVENT : params.sticker ? EventType.Sticker : EventType.RoomMessage;
 
+    if (params.scheduledAt) {
+      const scheduled = await scheduleRoomEvent(room, eventType, content, params.scheduledAt);
+      if (!scheduled) throw new Error('Failed to schedule the message');
+      onUpdate({
+        '@type': 'updateScheduledMessageSendSucceeded', chatId: chat.id, localId: localMessage.id, message: scheduled,
+      });
+      return scheduled;
+    }
+
     const { eventId } = await sendRoomEvent(room, eventType, content);
     if (params.sticker) {
       void addRecentSticker(content as PackImage, content[PACK_KEY] as string | undefined)
@@ -1669,7 +1718,7 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
   } catch (err) {
     if (onProgress?.isCanceled) return undefined;
     onUpdate({
-      '@type': 'updateMessageSendFailed',
+      '@type': params.scheduledAt ? 'updateScheduledMessageSendFailed' : 'updateMessageSendFailed',
       chatId: chat.id,
       localId: localMessage.id,
       error: err instanceof Error ? err.message : 'Failed to send',

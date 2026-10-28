@@ -537,8 +537,15 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
     return;
   }
 
-  const chat = selectChat(global, chatId!)!;
+  let chat = selectChat(global, chatId!)!;
   const user = selectUser(global, chatId!);
+  // A reply to someone's story goes to the chat with them, which may not exist yet
+  if (!chat && isStoryReply && user) {
+    await callApi('fetchChat', { type: 'user', user });
+    global = getGlobal();
+    chat = selectChat(global, chatId!)!;
+  }
+  if (!chat) return;
   const draft = selectDraft(global, chatId!, threadId!);
   const isForwarding = selectTabState(global, tabId).forwardMessages?.messageIds?.length;
 
@@ -3455,13 +3462,14 @@ addActionHandler('forwardStory', (global, actions, payload): ActionReturnType =>
   const { toChatId, tabId = getCurrentTabId() } = payload || {};
 
   const { fromChatId, storyId } = selectTabState(global, tabId).forwardMessages;
-  const fromChat = fromChatId ? selectChat(global, fromChatId) : undefined;
+  // The story's owner may be someone without a chat yet, so any known peer will do
+  const fromPeer = fromChatId ? selectPeer(global, fromChatId) : undefined;
   const toChat = toChatId ? selectChat(global, toChatId) : undefined;
   const story = fromChatId && storyId
     ? selectPeerStory(global, fromChatId, storyId)
     : undefined;
 
-  if (!fromChat || !toChat || !story || 'isDeleted' in story) {
+  if (!fromPeer || !toChat || !story || 'isDeleted' in story) {
     return;
   }
 

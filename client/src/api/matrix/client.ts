@@ -59,12 +59,13 @@ import {
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
 import { fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { handleReactionUsageAccountData } from './reactionUsage';
-import { handleStoryViewEvent } from './stories';
-import { STORY_VIEW_EVENT } from './storiesState';
+import { getRoomTtlSeconds, isExpiredEvent } from './retention';
 import { buildSessionData, setSession } from './session';
 import {
   clearStore, flushStore, getValue, loadStore, setStoreName, setValue,
 } from './store';
+import { handleStoryViewEvent } from './stories';
+import { STORY_VIEW_EVENT } from './storiesState';
 import { setTodoCompleterHandler, TODO_UPDATE_EVENT } from './todo';
 import { watchDeviceVerificationRequests } from './verification';
 import { startVerifiedBadgesPolling } from './verifiedBadges';
@@ -261,11 +262,47 @@ async function initCrypto(currentClient: MatrixClient, session: MatrixSession, i
   // Encrypted rooms stay unreadable until the next start, but the keys are kept for it
 }
 
+/* Auto-delete */
+
+const EXPIRY_SWEEP_INTERVAL_MS = 60 * 1000;
+let expirySweepInterval: ReturnType<typeof setInterval> | undefined;
+const expiredEventIds = new Set<string>();
+
+// Messages in auto-deleting chats disappear from open chats as they expire, before the server purges them
+function sweepExpiredMessages() {
+  if (!client) return;
+  const now = Date.now();
+  getVisibleRooms().forEach((room) => {
+    if (!getRoomTtlSeconds(room)) return;
+    const ids: number[] = [];
+    room.getLiveTimeline().getEvents().forEach((event) => {
+      const eventId = event.getId();
+      if (!eventId || expiredEventIds.has(eventId) || !isExpiredEvent(event, room, now)) return;
+      expiredEventIds.add(eventId);
+      const messageId = findMessageId(eventId);
+      if (messageId) ids.push(messageId);
+    });
+    if (ids.length) onUpdate({ '@type': 'deleteMessages', chatId: getChatIdForRoom(room), ids });
+  });
+}
+
+function startExpirySweep() {
+  stopExpirySweep();
+  expirySweepInterval = setInterval(sweepExpiredMessages, EXPIRY_SWEEP_INTERVAL_MS);
+}
+
+function stopExpirySweep() {
+  if (expirySweepInterval) clearInterval(expirySweepInterval);
+  expirySweepInterval = undefined;
+  expiredEventIds.clear();
+}
+
 export async function stopClient(shouldClearData: boolean) {
   const currentClient = client;
   client = undefined;
   stopReconnectProbes();
   stopLastSeenPolling();
+  stopExpirySweep();
   if (currentClient) {
     currentClient.stopClient();
     currentClient.removeAllListeners();
@@ -829,6 +866,7 @@ function handleSync(state: SyncState, prevState: SyncState | null) {
     autoJoinInvites();
     startLastSeenPolling();
     startVerifiedBadgesPolling();
+    startExpirySweep();
     syncDeferred.resolve();
     // The config may have been loaded before the account data arrived
     onUpdate({ '@type': 'updateConfig' });

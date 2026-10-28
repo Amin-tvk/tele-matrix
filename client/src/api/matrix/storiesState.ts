@@ -4,6 +4,11 @@ export const STORIES_PROFILE_FIELD = 'im.peyvand.stories';
 export const STORY_LIFETIME_MS = 24 * 60 * 60 * 1000;
 // Sent by a viewer's app to the story owner's devices
 export const STORY_VIEW_EVENT = 'im.peyvand.story_view';
+// On a message that answers a story, and on a forwarded story: `{ user_id, story_id }`
+export const STORY_REPLY_KEY = 'im.peyvand.story_reply';
+export const FORWARDED_STORY_KEY = 'im.peyvand.story';
+
+export type StoryRef = { user_id?: string; story_id?: number };
 
 // `content` has the shape of a Matrix image or video message, so it's built like one
 export type StoredStory = {

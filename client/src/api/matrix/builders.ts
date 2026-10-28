@@ -26,6 +26,7 @@ import type {
 } from '../types';
 import type { ApiMessageAction } from '../types/messageActions';
 import type { PackImage } from './stickersState';
+import type { StoryRef } from './storiesState';
 import { ApiMessageEntityTypes } from '../types';
 
 import { getEmojiOnlyCountForMessage } from '../../global/helpers/getEmojiOnlyCountForMessage';
@@ -41,9 +42,10 @@ import { parseHtmlToFormattedText, stripReplyFallback } from './html';
 import {
   encodeMxc, findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId,
 } from './ids';
-import { getEncryptedFileMediaId } from './media';
+import { getEncryptedFileMediaId, markGifMedia } from './media';
+import { getRoomTtlSeconds, isExpiredEvent, RETENTION_EVENT } from './retention';
 import { buildApiSticker, PACK_KEY, STICKER_MARKER } from './stickersState';
-import { getStoriesSummary } from './storiesState';
+import { FORWARDED_STORY_KEY, getStoriesSummary, STORY_REPLY_KEY } from './storiesState';
 import { buildTodoMedia } from './todo';
 import { getBadgeEmoji, isVerifiedId } from './verifiedState';
 
@@ -210,6 +212,7 @@ export function buildApiChatFromRoom(
       folderId: isArchived ? 1 : undefined,
       isListed: true,
       isVerified: isVerifiedId(dmUserId),
+      ttlPeriod: getRoomTtlSeconds(room),
     });
   }
 
@@ -237,6 +240,7 @@ export function buildApiChatFromRoom(
     hasUsername: alias ? true : undefined,
     areSignaturesShown: isChannel ? true : undefined,
     folderId: isArchived ? 1 : undefined,
+    ttlPeriod: getRoomTtlSeconds(room),
     isListed: true,
     isVerified: isVerifiedId(room.roomId),
   });
@@ -346,6 +350,17 @@ function buildPhoto(mediaId: string, content: Record<string, any>, date: number)
   };
 }
 
+function readStoryRef(value: unknown) {
+  const ref = value as StoryRef | undefined;
+  return ref && typeof ref.user_id === 'string' && typeof ref.story_id === 'number'
+    ? { peerId: getPeerIdByUserId(ref.user_id), storyId: ref.story_id } : undefined;
+}
+
+function buildStoryReplyInfo(event: MatrixEvent) {
+  const ref = readStoryRef(event.getContent()[STORY_REPLY_KEY]);
+  return ref ? { type: 'story' as const, ...ref } : undefined;
+}
+
 function buildMessageContent(
   event: MatrixEvent, context: ChatContext,
 ): MediaContent | undefined {
@@ -360,6 +375,15 @@ function buildMessageContent(
         text: UNDECRYPTABLE_TEXT,
         entities: [{ type: ApiMessageEntityTypes.Italic, offset: 0, length: UNDECRYPTABLE_TEXT.length }],
       },
+    };
+  }
+
+  // A forwarded story opens the story itself while it lasts; other apps see its picture or video
+  const forwardedStory = readStoryRef(content[FORWARDED_STORY_KEY]);
+  if (forwardedStory) {
+    return {
+      storyData: { mediaType: 'storyData', id: forwardedStory.storyId, peerId: forwardedStory.peerId },
+      text: buildCaption(content, resolvePeerId),
     };
   }
 
@@ -390,22 +414,9 @@ function buildMessageContent(
     }
     case MsgType.Image: {
       if (!mediaId) break;
-      if (info.mimetype === 'image/gif') {
-        return {
-          video: {
-            mediaType: 'video',
-            id: mediaId,
-            mimeType: 'image/gif',
-            duration: 0,
-            fileName,
-            width: info.w,
-            height: info.h,
-            size: info.size || 0,
-            isGif: true,
-          },
-          text: buildCaption(content, resolvePeerId),
-        };
-      }
+      // A GIF file can't play in the video player, so it is shown as a picture of the original file, which the
+      // browser animates; the server's thumbnails of it are still frames
+      if (info.mimetype === 'image/gif') markGifMedia(mediaId);
       return { photo: buildPhoto(mediaId, content, date), text: buildCaption(content, resolvePeerId) };
     }
     case MsgType.Video: {
@@ -545,6 +556,14 @@ function buildStateAction(event: MatrixEvent, room: Room, context: ChatContext):
         type: 'chatEditPhoto',
         photo: buildPhoto(encodeMxc(content.url), { info: { w: 640, h: 640 } }, Math.floor(event.getTs() / 1000)),
       };
+    case RETENTION_EVENT: {
+      const lifetime = content.max_lifetime;
+      return {
+        mediaType: 'action',
+        type: 'setMessagesTtl',
+        period: typeof lifetime === 'number' && lifetime > 0 ? Math.round(lifetime / 1000) : 0,
+      };
+    }
     default:
       return undefined;
   }
@@ -572,6 +591,7 @@ export function isDisplayableEvent(
 ) {
   if (event.isRedacted() || event.status) return false;
   if (event.isState() && isCreationSetupEvent(event, room)) return false;
+  if (room && isExpiredEvent(event, room)) return false;
   const type = event.getType();
   const relation = event.getRelation();
   if (relation?.rel_type === RelationType.Replace) return false;
@@ -587,6 +607,8 @@ export function isDisplayableEvent(
     case EventType.RoomName:
     case EventType.RoomAvatar:
       return !context.isPrivate;
+    case RETENTION_EVENT:
+      return true;
     case EventType.RoomMember: {
       if (context.isPrivate) return false;
       const membership = event.getContent().membership;
@@ -716,7 +738,7 @@ export function buildApiMessage(
     date: Math.floor(event.getTs() / 1000),
     isOutgoing,
     senderId: context.resolvePeerId(sender),
-    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : undefined,
+    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : buildStoryReplyInfo(event),
     forwardInfo,
     isEdited: replacingEvent ? true : undefined,
     editDate: replacingEvent ? Math.floor(replacingEvent.getTs() / 1000) : undefined,

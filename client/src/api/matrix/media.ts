@@ -202,10 +202,18 @@ export async function encryptAttachment(data: ArrayBuffer) {
   };
 }
 
+export function markGifMedia(mediaId: string) {
+  if (!getValue(`g:${mediaId}`)) setValue(`g:${mediaId}`, '1');
+}
+
 function pickThumbnailSize(parsed: ParsedMediaHash) {
   if (parsed.kind === 'avatar') return THUMBNAIL_SIZES.avatar;
   if (parsed.kind === 'profile') return THUMBNAIL_SIZES.profile;
   if (parsed.isDownload || !parsed.size) return undefined;
+  // A GIF's full view is the original file, so it moves
+  if (parsed.kind === 'photo' && parsed.size !== 'm' && parsed.size !== 's' && getValue(`g:${parsed.mediaId}`)) {
+    return undefined;
+  }
   return parsed.size === 'x' || parsed.size === 'y' || parsed.size === 'w'
     ? THUMBNAIL_SIZES.large : THUMBNAIL_SIZES.small;
 }

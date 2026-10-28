@@ -96,3 +96,12 @@ presence:
 modules:
   - module: peyvand_last_seen.LastSeenModule
     config: {}
+
+# Auto-delete messages: rooms with an m.room.retention state lose messages older than its max_lifetime
+retention:
+  enabled: true
+  purge_jobs:
+    - interval: 30m
+
+# Scheduled messages (MSC4140 delayed events), up to a year ahead
+max_event_delay_duration: 365d
