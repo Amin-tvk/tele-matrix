@@ -4468,9 +4468,9 @@
 "MatrixRecoveryRestore" = "Restore";
 "MatrixRecoveryDone_one" = "Done! {count} message key was restored. Encrypted messages will be readable in a moment.";
 "MatrixRecoveryDone_other" = "Done! {count} message keys were restored. Encrypted messages will be readable in a moment.";
-"MatrixRecoveryErrorWrongKey" = "This recovery key or phrase is not correct";
+"MatrixRecoveryErrorWrongKey" = "That doesn't open your message backup. Check for typos, or try your account password or another recovery key you saved.";
 "MatrixRecoveryErrorNoBackup" = "There is no key backup on this account";
-"MatrixRecoveryErrorUnknown" = "Something went wrong, please try again";
+"MatrixRecoveryErrorUnknown" = "Couldn't open the backup right now because of a connection or server problem. What you entered may well be right: try again in a moment.";
 "MatrixRecoveryPrompt" = "Enter your recovery key to read your encrypted messages on this device.";
 "MatrixDeviceBrokenAction" = "Sign Out";
 "MatrixDeviceBrokenTitle" = "Fix Encryption";
@@ -4586,5 +4586,5 @@
 "PeyvandStoryPost" = "Post Story";
 "PeyvandStoryPosted" = "Story posted. It's visible for 24 hours.";
 "PeyvandStoryVideoTooLong" = "Videos in stories can be up to {count} seconds long.";
-"PeyvandRecoveryPasswordDescription" = "Your message backup opens with your account password, but the password has changed since. Enter your previous password (or your recovery key, if you saved one) to read earlier messages. From then on, your current password opens it.";
-"PeyvandRecoveryPreviousPassword" = "Previous password or recovery key";
+"PeyvandRecoveryPasswordDescription" = "Your message backup opens with your account password. If you changed your password, enter the one you used before. A recovery key you saved works too. After that, your current password opens it on every new device.";
+"PeyvandRecoveryPreviousPassword" = "Account password or recovery key";
