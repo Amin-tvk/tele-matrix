@@ -69,7 +69,7 @@ suppress_key_server_warning: true
 experimental_features:
   msc3266_enabled: true
   msc4222_enabled: true
-max_event_delay_duration: 24h
+max_event_delay_duration: 365d
 
 # Voice and video calls: clients get short-lived credentials for the coturn relay
 turn_uris:
@@ -102,6 +102,3 @@ retention:
   enabled: true
   purge_jobs:
     - interval: 30m
-
-# Scheduled messages (MSC4140 delayed events), up to a year ahead
-max_event_delay_duration: 365d
