@@ -40,7 +40,7 @@ import type {
 import type { PackImage } from './stickersState';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../types';
 
-import { MUTE_INDEFINITE_TIMESTAMP } from '../../config';
+import { MUTE_INDEFINITE_TIMESTAMP, SCHEDULED_WHEN_ONLINE } from '../../config';
 import { getEmojiOnlyCountForMessage } from '../../global/helpers/getEmojiOnlyCountForMessage';
 import buildUploadingMedia from '../../util/buildUploadingMedia';
 import { addTimestampEntities } from '../../util/dates/timestamp';
@@ -1148,7 +1148,7 @@ export async function setChannelComments({ chat, isEnabled }: { chat: ApiChat; i
   if (!room) return false;
   const client = getClient();
   // In an encrypted room every event is sent as the same encrypted type, so posting can't be told from commenting
-  if (isEnabled && client.isRoomEncrypted(room.roomId)) return 'encrypted' as const;
+  if (isEnabled && await isRoomEncrypted(room)) return 'encrypted' as const;
 
   const content = { ...(room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent() || {}) };
   const events: Record<string, number> = { ...(content.events || {}) };
@@ -1380,6 +1380,7 @@ export async function searchMessagesGlobal({
 }
 
 export function sendMessageLocal(params: SendMessageParams) {
+  if (params.scheduledAt === SCHEDULED_WHEN_ONLINE) params = { ...params, scheduledAt: undefined };
   const {
     chat, lastMessageId, text, entities, replyInfo, attachment, sticker, gif, groupedId, wasDrafted, todo,
   } = params;
@@ -1433,10 +1434,17 @@ function getImageDimensions(attachment: ApiAttachment) {
   return dimensions ? { w: dimensions.width, h: dimensions.height } : {};
 }
 
+// The room's encryption setting may be known only to the crypto engine (the SDK's own sends ask it too)
+async function isRoomEncrypted(room: Room) {
+  const client = getClient();
+  return client.isRoomEncrypted(room.roomId)
+    || Boolean(await client.getCrypto()?.isEncryptionEnabledInRoom(room.roomId));
+}
+
 async function buildAttachmentContent(
   room: Room, attachment: ApiAttachment, localMessage: ApiMessage, onProgress?: ApiOnProgress,
 ) {
-  const isEncrypted = getClient().isRoomEncrypted(room.roomId);
+  const isEncrypted = await isRoomEncrypted(room);
   const blob: Blob = attachment.blob
     || await fetch(attachment.compressedBlobUrl || attachment.blobUrl).then((response) => response.blob());
   const messageKey = getMessageKey(localMessage);
@@ -1614,6 +1622,8 @@ function buildStickerContent(sticker: ApiSticker): Record<string, unknown> {
 }
 
 export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnProgress) {
+  // Matrix can't hold a message until the other person comes online, so "send when online" sends it now
+  if (params.scheduledAt === SCHEDULED_WHEN_ONLINE) params = { ...params, scheduledAt: undefined };
   const { chat } = params;
   if (!chat) return undefined;
 

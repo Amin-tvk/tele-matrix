@@ -101,14 +101,23 @@ async function sendDelayed(room: Room, type: string, content: Record<string, unk
   // The SDK sends delayed events as they are, so an encrypted chat's message is encrypted here first
   let wireType = type;
   let wireContent = content;
-  if (client.isRoomEncrypted(room.roomId)) {
+  // The room's encryption setting may be known only to the crypto engine, like for the SDK's own sends
+  const isEncrypted = client.isRoomEncrypted(room.roomId)
+    || Boolean(await client.getCrypto()?.isEncryptionEnabledInRoom(room.roomId));
+  if (isEncrypted) {
     const event = new MatrixEventClass({
       type, content, room_id: room.roomId, sender: getMyUserId(), event_id: `~${client.makeTxnId()}`,
     });
-    await (client as unknown as { encryptEventIfNeeded: (e: MatrixEvent, r: Room) => Promise<void> })
-      .encryptEventIfNeeded(event, room);
+    // Encrypted by the crypto engine itself: the SDK's helper only takes events it is already sending
+    const { cryptoBackend } = client as unknown as {
+      cryptoBackend?: { encryptEvent: (e: MatrixEvent, r: Room) => Promise<void> };
+    };
+    if (!cryptoBackend) throw new Error('Encryption is not ready');
+    await cryptoBackend.encryptEvent(event, room);
     wireType = event.getWireType();
     wireContent = event.getWireContent();
+    // Never hand the server a readable copy of a message meant for an encrypted chat
+    if (wireType !== EventType.RoomMessageEncrypted) throw new Error('Could not encrypt the scheduled message');
   }
   const path = `/rooms/${encodeURIComponent(room.roomId)}/send/${encodeURIComponent(wireType)}/`
     + encodeURIComponent(client.makeTxnId());
