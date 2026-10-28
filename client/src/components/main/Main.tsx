@@ -38,6 +38,7 @@ import buildClassName from '../../util/buildClassName';
 import { waitForTransitionEnd } from '../../util/cssAnimationEndListeners';
 import { processDeepLink } from '../../util/deeplink';
 import { Bundles, loadBundle } from '../../util/moduleLoader';
+import { initRightColumnWidth } from '../../util/rightColumnWidth';
 import { parseInitialLocationHash, parseLocationHash } from '../../util/routing';
 import updateIcon from '../../util/updateIcon';
 import { REM } from '../common/helpers/mediaDimensions';
@@ -89,8 +90,8 @@ import ForwardRecipientPicker from './ForwardRecipientPicker.async';
 import GameModal from './GameModal';
 import HistoryCalendar from './HistoryCalendar.async';
 import MobileTabBar from './MobileTabBar';
-import PasscodeOfferModal from './PasscodeOfferModal';
 import NewContactModal from './NewContactModal.async';
+import PasscodeOfferModal from './PasscodeOfferModal';
 import PremiumLimitReachedModal from './premium/common/PremiumLimitReachedModal.async';
 import GiveawayModal from './premium/GiveawayModal.async';
 import PremiumMainModal from './premium/PremiumMainModal.async';
@@ -160,6 +161,9 @@ const CALL_BUNDLE_LOADING_DELAY_MS = 5000; // 5 sec
 const EDITOR_BUNDLE_LOADING_DELAY_MS = 10000; // 10 sec
 
 let DEBUG_isLogged = false;
+
+// The side panel's saved width is applied before the first layout
+initRightColumnWidth();
 
 const Main = ({
   isMobile,

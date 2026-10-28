@@ -17,6 +17,39 @@
   transition: transform var(--layer-transition);
 
   corner-shape: squircle;
+  .RightColumn-resize-handle {
+    cursor: ew-resize;
+
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    bottom: 0;
+    left: 0;
+
+    width: 0.375rem;
+
+    &::after {
+      content: "";
+
+      position: absolute;
+      top: 50%;
+      left: 0.125rem;
+      transform: translateY(-50%);
+
+      width: 0.1875rem;
+      height: 2.5rem;
+      border-radius: 0.125rem;
+
+      opacity: 0;
+      background: var(--color-primary);
+
+      transition: opacity 150ms;
+    }
+
+    &:hover::after {
+      opacity: 0.6;
+    }
+  }
 
   body.no-page-transitions &,
   body.no-right-column-animations & {

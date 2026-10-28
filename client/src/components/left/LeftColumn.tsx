@@ -19,6 +19,7 @@ import {
   IS_APP, IS_FIREFOX, IS_MAC_OS, IS_TOUCH_ENV,
 } from '../../util/browser/windowEnvironment';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
+import { openCommandPalette, toggleCurrentChatMuted } from '../../util/commandPalette';
 import { resolveTransitionName } from '../../util/resolveTransitionName';
 import { captureControlledSwipe } from '../../util/swipeController';
 import { isComposerHasSelection } from '../middle/composer/helpers/selection';
@@ -117,6 +118,7 @@ function LeftColumn({
     openLeftColumnContent,
     openSettingsScreen,
     openQuickChatPicker,
+    toggleChatInfo,
   } = getActions();
 
   const [contactsFilter, setContactsFilter] = useState<string>('');
@@ -462,9 +464,28 @@ function LeftColumn({
     openQuickChatPicker();
   });
 
+  const handleShortcutsHelp = useLastCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    openCommandPalette('shortcuts');
+  });
+
+  const handleToggleSidePanel = useLastCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    toggleChatInfo(undefined);
+  });
+
+  const handleToggleMute = useLastCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    toggleCurrentChatMuted();
+  });
+
   useHotkeys(useMemo(() => ({
     'Mod+Shift+F': handleHotkeySearch,
     'Mod+K': handleQuickChatPicker,
+    'Mod+/': handleShortcutsHelp,
+    'Alt+I': handleToggleSidePanel,
+    'Mod+Shift+M': handleToggleMute,
+    ...(!IS_MAC_OS || !IS_APP ? { 'Mod+,': handleHotkeySettings } : undefined),
     // https://support.mozilla.org/en-US/kb/take-screenshots-firefox
     ...(!IS_FIREFOX && {
       'Mod+Shift+S': handleHotkeySavedMessages,

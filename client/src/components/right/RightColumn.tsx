@@ -18,6 +18,7 @@ import {
 import { selectSharedSettings } from '../../global/selectors/sharedState.ts';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { resolveTransitionName } from '../../util/resolveTransitionName.ts';
+import { clampRightColumnWidth, saveRightColumnWidth } from '../../util/rightColumnWidth';
 
 import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
 import useFlag from '../../hooks/useFlag';
@@ -125,6 +126,32 @@ const RightColumn: FC<OwnProps & StateProps> = ({
   const isCreatingTopic = contentKey === RightColumnContent.CreateTopic;
   const isEditingTopic = contentKey === RightColumnContent.EditTopic;
   const isOverlaying = windowWidth <= MIN_SCREEN_WIDTH_FOR_STATIC_RIGHT_COLUMN;
+
+  // Dragging the panel's left edge sets its width; a double click goes back to the default
+  const handleResizeStart = useLastCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isOverlaying) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add('cursor-ew-resize', 'no-right-column-animations');
+    let width: number | undefined;
+    const handleMove = (moveEvent: PointerEvent) => {
+      width = clampRightColumnWidth(window.innerWidth - moveEvent.clientX);
+      document.documentElement.style.setProperty('--right-column-width', `${width}px`);
+    };
+    const handleUp = () => {
+      handle.removeEventListener('pointermove', handleMove);
+      handle.removeEventListener('pointerup', handleUp);
+      handle.removeEventListener('pointercancel', handleUp);
+      document.body.classList.remove('cursor-ew-resize', 'no-right-column-animations');
+      if (width) saveRightColumnWidth(width);
+    };
+    handle.addEventListener('pointermove', handleMove);
+    handle.addEventListener('pointerup', handleUp);
+    handle.addEventListener('pointercancel', handleUp);
+  });
+
+  const handleResizeReset = useLastCallback(() => saveRightColumnWidth(undefined));
   const isContentScrolledRef = useRef(false);
 
   const hasStaticHeader = isSavedMessages || isAddingChatMembers || isCreatingTopic || isEditingTopic
@@ -394,6 +421,14 @@ const RightColumn: FC<OwnProps & StateProps> = ({
         <div className="overlay-backdrop" onClick={close} />
       )}
       <div id="RightColumn">
+        {!isOverlaying && (
+          <div
+            className="RightColumn-resize-handle"
+            title="Drag to resize"
+            onPointerDown={handleResizeStart}
+            onDoubleClick={handleResizeReset}
+          />
+        )}
         <RightHeader
           chatId={chatId}
           threadId={threadId}

@@ -15,6 +15,7 @@ import {
 } from '../../../config';
 import { IS_APP, IS_MAC_OS } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import { openNearestUnreadChat } from '../../../util/commandPalette';
 import { getOrderKey, getPinnedChatsCount } from '../../../util/folderManager';
 import { ARCHIVE_ANIMATION_ID } from './hooks';
 
@@ -123,6 +124,14 @@ const ChatList = ({
     'Alt+ArrowDown': (e: KeyboardEvent) => {
       e.preventDefault();
       openNextChat({ targetIndexDelta: 1, orderedIds });
+    },
+    'Alt+Shift+ArrowUp': (e: KeyboardEvent) => {
+      e.preventDefault();
+      openNearestUnreadChat(orderedIds, -1);
+    },
+    'Alt+Shift+ArrowDown': (e: KeyboardEvent) => {
+      e.preventDefault();
+      openNearestUnreadChat(orderedIds, 1);
     },
   } : undefined), [isActive, orderedIds]));
 
