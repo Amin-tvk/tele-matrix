@@ -302,6 +302,7 @@ export enum SettingsScreens {
   DoNotTranslate,
   FoldersShare,
   Passkeys,
+  Security,
 }
 
 export type StickerSetOrReactionsSetOrRecent = Pick<ApiStickerSet, (

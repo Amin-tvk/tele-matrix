@@ -192,7 +192,7 @@ function LeftColumn({
         case SettingsScreens.DataStorage:
         case SettingsScreens.Privacy:
         case SettingsScreens.Performance:
-        case SettingsScreens.ActiveSessions:
+        case SettingsScreens.Security:
         case SettingsScreens.Language:
         case SettingsScreens.Stickers:
         case SettingsScreens.Experimental:
@@ -206,9 +206,13 @@ function LeftColumn({
           openSettingsScreen({ screen: SettingsScreens.GeneralChatBackground });
           return;
 
-        // Last seen is opened straight from the main settings screen
+        // The Security screen gathers what Telegram keeps under Privacy, which Tele doesn't show
         case SettingsScreens.PrivacyLastSeen:
-          openSettingsScreen({ screen: SettingsScreens.Main });
+        case SettingsScreens.ActiveSessions:
+        case SettingsScreens.PasscodeDisabled:
+        case SettingsScreens.PasscodeEnabled:
+        case SettingsScreens.PasscodeCongratulations:
+          openSettingsScreen({ screen: SettingsScreens.Security });
           return;
 
         case SettingsScreens.PrivacyPhoneNumber:
@@ -230,9 +234,6 @@ function LeftColumn({
         case SettingsScreens.TwoFaDisabled:
         case SettingsScreens.TwoFaEnabled:
         case SettingsScreens.TwoFaCongratulations:
-        case SettingsScreens.PasscodeDisabled:
-        case SettingsScreens.PasscodeEnabled:
-        case SettingsScreens.PasscodeCongratulations:
         case SettingsScreens.Passkeys:
           openSettingsScreen({ screen: SettingsScreens.Privacy });
           return;

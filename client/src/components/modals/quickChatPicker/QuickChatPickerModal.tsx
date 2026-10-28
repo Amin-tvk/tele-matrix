@@ -190,8 +190,8 @@ const QuickChatPickerModal = ({
       id: 'privacy',
       title: 'Privacy and Security',
       icon: 'lock',
-      keywords: 'last seen passcode settings',
-      run: () => openSettingsScreen({ screen: SettingsScreens.Privacy }),
+      keywords: 'last seen passcode lock encryption backup recovery key devices sessions settings',
+      run: () => openSettingsScreen({ screen: SettingsScreens.Security }),
     },
     {
       id: 'notifications',

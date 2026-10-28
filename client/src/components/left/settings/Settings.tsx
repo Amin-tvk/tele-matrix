@@ -38,6 +38,7 @@ import SettingsPrivacyBlockedUsers from './SettingsPrivacyBlockedUsers';
 import SettingsPrivacyVisibility from './SettingsPrivacyVisibility';
 import SettingsPrivacyVisibilityExceptionList from './SettingsPrivacyVisibilityExceptionList';
 import SettingsQuickReaction from './SettingsQuickReaction';
+import SettingsSecurity from './SettingsSecurity';
 import SettingsStickers from './SettingsStickers';
 import SettingsTwoFa from './twoFa/SettingsTwoFa';
 
@@ -339,6 +340,8 @@ const Settings = ({
             onReset={handleReset}
           />
         );
+      case SettingsScreens.Security:
+        return <SettingsSecurity isActive={isScreenActive} onReset={handleReset} />;
       case SettingsScreens.ActiveSessions:
         return (
           <SettingsActiveSessions

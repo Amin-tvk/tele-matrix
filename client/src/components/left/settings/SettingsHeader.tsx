@@ -214,6 +214,8 @@ const SettingsHeader = ({
       case SettingsScreens.Performance:
         return <h3>{lang('MenuAnimations')}</h3>;
 
+      case SettingsScreens.Security:
+        return <h3>Privacy and Security</h3>;
       case SettingsScreens.ActiveSessions:
         return <h3>{lang('SessionsTitle')}</h3>;
       case SettingsScreens.ActiveWebsites:

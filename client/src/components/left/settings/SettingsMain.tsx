@@ -55,7 +55,6 @@ const SettingsMain = ({
 }: OwnProps & StateProps) => {
   const {
     loadMoreProfilePhotos,
-    openEncryptionRecoveryModal,
     openServerAdminModal,
     openPremiumModal,
     openSupportChat,
@@ -157,16 +156,16 @@ const SettingsMain = ({
             </ListItem>
           )}
 
-          {/* Last seen is the one privacy setting the Matrix server enforces */}
+          {/* Passcode, encryption keys, devices and last seen */}
           <ListItem
             icon="lock-filled"
             iconBg="gray"
             multiline
             narrow
-            onClick={() => openSettingsScreen({ screen: SettingsScreens.PrivacyLastSeen })}
+            onClick={() => openSettingsScreen({ screen: SettingsScreens.Security })}
           >
-            <span className="title">{lang('PrivacyLastSeen')}</span>
-            <span className="subtitle">{lang('PeyvandLastSeenDesc')}</span>
+            <span className="title">Privacy and Security</span>
+            <span className="subtitle">Passcode, encryption, devices, last seen</span>
           </ListItem>
 
           <ListItem
@@ -228,17 +227,6 @@ const SettingsMain = ({
             </span>
           </ListItem>
 
-          <ListItem
-            icon="lock-filled"
-            iconBg="green"
-            multiline
-            narrow
-            onClick={() => openEncryptionRecoveryModal()}
-          >
-            <span className="title">{lang('MatrixEncryptionSettings')}</span>
-            <span className="subtitle">{lang('MatrixEncryptionSettingsDesc')}</span>
-          </ListItem>
-
           {isServerAdmin && (
             <ListItem
               icon="admin"
@@ -251,20 +239,6 @@ const SettingsMain = ({
               <span className="subtitle">{lang('MatrixAdminSettingsDesc')}</span>
             </ListItem>
           )}
-
-          <ListItem
-            icon="devices-filled"
-            iconBg="blue"
-            multiline
-            narrow
-            rightElement={sessionCount > 0
-              ? <span className="settings-item__current-value">{sessionCount}</span>
-              : undefined}
-            onClick={() => openSettingsScreen({ screen: SettingsScreens.ActiveSessions })}
-          >
-            <span className="title">{lang('SessionsTitle')}</span>
-            <span className="subtitle">{lang('SettingsSessionsDesc')}</span>
-          </ListItem>
         </Island>
 
         {IS_TELEGRAM_SERVICES_ENABLED && (
