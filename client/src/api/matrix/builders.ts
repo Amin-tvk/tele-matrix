@@ -36,7 +36,7 @@ import {
   COMMENT_EVENT, getCommentRootEventId, getCommentsChatId, isCommentEvent, rememberCommentEvent,
 } from './comments';
 import {
-  FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR, UNDECRYPTABLE_TEXT,
+  FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR, UNDECRYPTABLE_TEXT,
 } from './constants';
 import { parseHtmlToFormattedText, stripReplyFallback } from './html';
 import {
@@ -146,6 +146,8 @@ export function getRoomPowerLevels(room: Room) {
   return {
     getUserLevel: (userId: string) => (creators.has(userId) ? POWER_LEVEL_CREATOR : users[userId] ?? usersDefault),
     messageLevel: events[EventType.RoomMessage] ?? eventsDefault,
+    stickerLevel: events[EventType.Sticker] ?? eventsDefault,
+    reactionLevel: events[EventType.Reaction] ?? eventsDefault,
     nameLevel: events[EventType.RoomName] ?? stateDefault,
     pinLevel: events[EventType.RoomPinnedEvents] ?? stateDefault,
     tagLevel: events[MEMBER_TAG_EVENT] ?? stateDefault,
@@ -178,18 +180,46 @@ function buildAdminRights(level: number, room: Room): ApiChatAdminRights | undef
   });
 }
 
+// Rights that only the app enforces, saved by the group's permissions screen
+const STORED_RIGHTS = [
+  'sendPhotos', 'sendVideos', 'sendRoundvideos', 'sendAudios', 'sendVoices', 'sendDocs', 'sendPolls', 'embedLinks',
+] as const;
+
+function getStoredBannedRights(room: Room) {
+  const content = room.currentState.getStateEvents(PERMISSIONS_EVENT, '')?.getContent() || {};
+  const banned: Record<string, unknown> = content.banned || {};
+  return omitUndefined<ApiChatBannedRights>(Object.fromEntries(
+    STORED_RIGHTS.map((key) => [key, banned[key] ? true : undefined]),
+  ));
+}
+
 function buildBannedRights(level: number, room: Room): ApiChatBannedRights | undefined {
   const levels = getRoomPowerLevels(room);
+  const isRestricted = level < POWER_LEVEL_ADMIN;
   const rights = omitUndefined<ApiChatBannedRights>({
+    ...(isRestricted && !isRoomChannel(room) ? getStoredBannedRights(room) : undefined),
     sendMessages: level < levels.messageLevel ? true : undefined,
     sendMedia: level < levels.messageLevel ? true : undefined,
     sendPlain: level < levels.messageLevel ? true : undefined,
+    sendStickers: level < levels.stickerLevel ? true : undefined,
+    sendGifs: level < levels.stickerLevel ? true : undefined,
+    sendReactions: level < levels.reactionLevel ? true : undefined,
     changeInfo: level < levels.nameLevel ? true : undefined,
     inviteUsers: level < levels.inviteLevel ? true : undefined,
     pinMessages: level < levels.pinLevel ? true : undefined,
     editRank: level < levels.tagLevel ? true : undefined,
   });
+  if (rights.sendPhotos && rights.sendVideos && rights.sendRoundvideos && rights.sendAudios && rights.sendVoices
+    && rights.sendDocs) {
+    rights.sendMedia = true;
+  }
   return Object.keys(rights).length ? rights : undefined;
+}
+
+// What an ordinary member may do: the group's permissions screen
+export function buildDefaultBannedRights(room: Room) {
+  if (isRoomChannel(room)) return undefined;
+  return buildBannedRights(getRoomPowerLevels(room).usersDefault, room) || {};
 }
 
 export function buildApiChatFromRoom(
@@ -232,6 +262,7 @@ export function buildApiChatFromRoom(
     isOwner: myLevel >= POWER_LEVEL_OWNER ? true : undefined,
     adminRights: buildAdminRights(myLevel, room),
     currentUserBannedRights: buildBannedRights(myLevel, room),
+    defaultBannedRights: buildDefaultBannedRights(room),
     isNotJoined: membership !== 'join' ? true : undefined,
     isForbidden: membership === 'leave' || membership === 'ban' ? true : undefined,
     // Room addresses on this server can be changed in the group type settings

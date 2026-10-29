@@ -25,6 +25,8 @@ export const SYNC_POLL_TIMEOUT_MS = 15000;
 // Room state event holding a member's tag shown next to their name. Servers only let a user set state keys
 // equal to their own ID when the key starts with "@", so the member's user ID is stored behind a prefix
 export const MEMBER_TAG_EVENT = 'im.peyvand.member_tag';
+// Group permissions Matrix can't enforce by event type (photos vs. files etc.); clients hide those buttons
+export const PERMISSIONS_EVENT = 'im.peyvand.permissions';
 export const MEMBER_TAG_KEY_PREFIX = 'member:';
 
 // Account data event holding the user's chat folders

@@ -623,9 +623,9 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
     const hasPinMessageRight = getHasAdminRight(chat, 'pinMessages');
     const isPinMessageRightBanned = isUserRightBanned(chat, 'pinMessages', chatFullInfo);
 
+    // The room's power levels decide, public address or not
     if (isSuperGroup) {
-      const hasUsernameOrGeo = chat.hasUsername || chat.hasGeo;
-      return hasPinMessageRight || (!hasUsernameOrGeo && !isPinMessageRightBanned);
+      return hasPinMessageRight || !isPinMessageRightBanned;
     }
 
     if (isBasicGroup) {

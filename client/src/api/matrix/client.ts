@@ -46,8 +46,8 @@ import {
   getThreadSummary, isCommentEvent, removeCommentFromSummary, setThreadSummaryCount,
 } from './comments';
 import {
-  CALL_EVENT_PREFIX, INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, QUICK_REACTION_EVENT,
-  SYNC_POLL_TIMEOUT_MS,
+  CALL_EVENT_PREFIX, INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT,
+  QUICK_REACTION_EVENT, SYNC_POLL_TIMEOUT_MS,
 } from './constants';
 import {
   cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict, markDeviceBroken,
@@ -967,7 +967,7 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
   if (type === EventType.Direct) return;
 
   if (type === EventType.RoomMember || type === EventType.RoomPowerLevels || type === EventType.RoomAvatar
-    || type === EventType.RoomName || type === EventType.RoomTopic) {
+    || type === EventType.RoomName || type === EventType.RoomTopic || type === PERMISSIONS_EVENT) {
     if (type === EventType.RoomMember && computeDirectRooms()) {
       announceChat(room, true);
     } else if (type === EventType.RoomMember) {

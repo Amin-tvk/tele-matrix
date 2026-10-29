@@ -99,7 +99,7 @@ import {
   areCommentsEnabled, COMMENT_EVENT, getThreadSummary, isCommentEvent, isCommentsChatId, setThreadSummary,
 } from './comments';
 import {
-  DEVICE_DISPLAY_NAME, FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PUSH_APP_ID, PUSH_GATEWAY_URL, ROUND_VIDEO_KEY,
+  DEVICE_DISPLAY_NAME, FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT, PUSH_APP_ID, PUSH_GATEWAY_URL, ROUND_VIDEO_KEY,
   THUMBNAIL_SEPARATOR,
 } from './constants';
 import { findRoomByAddress, searchPublicRooms, withTimeout } from './directory';
@@ -766,8 +766,55 @@ export async function updateChatMemberBannedRights({
   if (isMuted && level >= levels.messageLevel) {
     await client.setPowerLevel(room.roomId, userId, levels.messageLevel - 1);
   } else if (!isMuted && level < levels.messageLevel) {
-    await client.setPowerLevel(room.roomId, userId, levels.usersDefault);
+    // When the group lets nobody write, an exception lifts this member to the writing level
+    const isGroupMuted = levels.messageLevel > levels.usersDefault && levels.messageLevel < POWER_LEVEL_ADMIN;
+    await client.setPowerLevel(room.roomId, userId, isGroupMuted ? levels.messageLevel : levels.usersDefault);
   }
+  return true;
+}
+
+// Ordinary members' rights (the group's permissions screen) become the room's power levels. Writing stays above
+// the members' level but below admins', or the group would turn into a channel
+const MUTED_GROUP_LEVEL = 1;
+
+export async function updateChatDefaultBannedRights({
+  chat, bannedRights,
+}: { chat: ApiChat; bannedRights: ApiChatBannedRights }) {
+  const room = requireRoom(chat);
+  if (!room || isRoomChannel(room)) return undefined;
+  const client = getClient();
+  const content = { ...(room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent() || {}) };
+  const { usersDefault } = getRoomPowerLevels(room);
+  const events: Record<string, number> = { ...(content.events || {}) };
+  const setLevel = (types: string[], isBanned: boolean | undefined, bannedLevel: number) => {
+    types.forEach((type) => {
+      events[type] = isBanned ? bannedLevel : usersDefault;
+    });
+  };
+
+  const isMuted = Boolean(bannedRights.sendMessages || bannedRights.sendPlain);
+  setLevel([EventType.RoomMessage, EventType.RoomMessageEncrypted], isMuted, usersDefault + MUTED_GROUP_LEVEL);
+  setLevel([EventType.Sticker], isMuted || bannedRights.sendStickers || bannedRights.sendGifs,
+    usersDefault + MUTED_GROUP_LEVEL);
+  setLevel([EventType.Reaction], bannedRights.sendReactions, usersDefault + MUTED_GROUP_LEVEL);
+  setLevel([EventType.RoomPinnedEvents], bannedRights.pinMessages, POWER_LEVEL_ADMIN);
+  setLevel([EventType.RoomName, EventType.RoomAvatar, EventType.RoomTopic], bannedRights.changeInfo,
+    POWER_LEVEL_ADMIN);
+  setLevel([MEMBER_TAG_EVENT], bannedRights.editRank, POWER_LEVEL_ADMIN);
+  const nextContent = {
+    ...content,
+    events,
+    invite: bannedRights.inviteUsers ? POWER_LEVEL_ADMIN : usersDefault,
+  };
+
+  const banned = Object.fromEntries(Object.entries(bannedRights).filter(([key, value]) => key !== 'untilDate' && value));
+  const permissions = room.currentState.getStateEvents(PERMISSIONS_EVENT, '')?.getContent();
+  await Promise.all([
+    client.sendStateEvent(room.roomId, EventType.RoomPowerLevels, nextContent as never, ''),
+    JSON.stringify(permissions?.banned || {}) === JSON.stringify(banned)
+      ? undefined
+      : client.sendStateEvent(room.roomId, PERMISSIONS_EVENT as never, { banned } as never, ''),
+  ]);
   return true;
 }
 
