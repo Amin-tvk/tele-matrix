@@ -1489,6 +1489,27 @@ async function isRoomEncrypted(room: Room) {
     || Boolean(await client.getCrypto()?.isEncryptionEnabledInRoom(room.roomId));
 }
 
+const STILL_THUMBNAIL_MAX_SIDE = 800;
+
+// The server has no thumbnails for an untyped GIF, so other apps get the first frame to show until it loads
+async function uploadStillThumbnail(blob: Blob) {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, STILL_THUMBNAIL_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = new OffscreenCanvas(w, h);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const still = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+    const { url } = await uploadFile(still, 'thumbnail.jpg', 'image/jpeg', false);
+    return { thumbnail_url: url, thumbnail_info: { mimetype: 'image/jpeg', size: still.size, w, h } };
+  } catch {
+    // Thumbnail is optional
+    return undefined;
+  }
+}
+
 async function buildAttachmentContent(
   room: Room, attachment: ApiAttachment, localMessage: ApiMessage, onProgress?: ApiOnProgress,
 ) {
@@ -1501,7 +1522,11 @@ async function buildAttachmentContent(
   }, { get isCanceled() { return onProgress.isCanceled; } }) : undefined;
 
   const { mimeType, filename } = attachment;
-  const uploaded = await uploadFile(blob, filename, mimeType, isEncrypted, progress);
+  const isGifPhoto = !attachment.shouldSendAsFile && mimeType === 'image/gif';
+  // Synapse renders animated thumbnails of every size, frame by frame, before it answers an image/gif upload
+  // (a minute for a big GIF, past the CDN's timeout). Untyped uploads skip that, like encrypted files do
+  const uploadMimeType = isGifPhoto && !isEncrypted ? 'application/octet-stream' : mimeType;
+  const uploaded = await uploadFile(blob, filename, uploadMimeType, isEncrypted, progress);
   const source = uploaded.file ? { file: uploaded.file } : { url: uploaded.url };
   const baseInfo = { mimetype: mimeType, size: blob.size };
 
@@ -1537,7 +1562,11 @@ async function buildAttachmentContent(
       body: filename,
       filename,
       ...source,
-      info: { ...baseInfo, ...getImageDimensions(attachment) },
+      info: {
+        ...baseInfo,
+        ...getImageDimensions(attachment),
+        ...(isGifPhoto && !isEncrypted ? await uploadStillThumbnail(blob) : undefined),
+      },
     };
   }
 

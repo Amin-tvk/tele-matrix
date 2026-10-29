@@ -310,6 +310,10 @@ export async function downloadMedia(
   if (!result) return undefined;
 
   let mimeType = result.mimeType;
+  // Animated GIFs are uploaded untyped (see uploadAnimatedGif); the file itself says what it is
+  if ((!mimeType || mimeType === 'application/octet-stream') && isGifData(result.data)) {
+    mimeType = 'image/gif';
+  }
   // Prevent HTML-in-media attacks
   if (!isHtmlAllowed && mimeType) {
     mimeType = mimeType.replace(/html/gi, '');
@@ -343,6 +347,12 @@ export async function downloadMedia(
     mimeType,
     fullSize: result.fullSize,
   };
+}
+
+function isGifData(data: ArrayBuffer) {
+  if (data.byteLength < 6) return false;
+  const header = new Uint8Array(data, 0, 6);
+  return String.fromCharCode(...header) === 'GIF87a' || String.fromCharCode(...header) === 'GIF89a';
 }
 
 export function uploadContent(

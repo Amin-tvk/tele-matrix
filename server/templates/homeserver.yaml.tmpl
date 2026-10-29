@@ -30,9 +30,6 @@ database:
 log_config: "/data/log.config"
 media_store_path: /data/media_store
 max_upload_size: 100M
-# Make thumbnails when first asked for, not during the upload: an animated GIF otherwise holds its upload for
-# up to a minute while every size is rendered frame by frame
-dynamic_thumbnails: true
 url_preview_enabled: true
 url_preview_ip_range_blacklist:
   - '127.0.0.0/8'
