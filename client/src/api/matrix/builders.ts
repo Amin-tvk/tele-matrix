@@ -159,6 +159,15 @@ export function getRoomPowerLevels(room: Room) {
   };
 }
 
+// Someone added to a group belongs to it right away, as in Telegram, though Matrix waits until their app accepts
+export function getRoomMembers(room: Room) {
+  return [...room.getJoinedMembers(), ...room.getMembersWithMembership('invite')];
+}
+
+export function getRoomMemberCount(room: Room) {
+  return room.getJoinedMemberCount() + room.getInvitedMemberCount();
+}
+
 export function isRoomChannel(room: Room) {
   const { messageLevel, usersDefault } = getRoomPowerLevels(room);
   return messageLevel > usersDefault && messageLevel >= POWER_LEVEL_ADMIN;
@@ -257,7 +266,7 @@ export function buildApiChatFromRoom(
     type: isChannel ? 'chatTypeChannel' : 'chatTypeSuperGroup',
     title: room.name || getLocalpart(room.roomId),
     avatarPhotoId: room.getMxcAvatarUrl() ? encodeMxc(room.getMxcAvatarUrl()!) : undefined,
-    membersCount: room.getJoinedMemberCount() || undefined,
+    membersCount: getRoomMemberCount(room) || undefined,
     creationDate: createEvent ? Math.floor(createEvent.getTs() / 1000) : undefined,
     isOwner: myLevel >= POWER_LEVEL_OWNER ? true : undefined,
     adminRights: buildAdminRights(myLevel, room),

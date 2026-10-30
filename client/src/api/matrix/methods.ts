@@ -55,6 +55,8 @@ import {
   getLocalpart,
   getMemberTag,
   getReplyTargetEventId,
+  getRoomMemberCount,
+  getRoomMembers,
   getRoomPowerLevels,
   isDisplayableEvent,
   isMentioningUser,
@@ -473,7 +475,7 @@ export async function requestChatUpdate({ chat }: { chat: ApiChat; lastLocalMess
 function buildMembers(room: Room) {
   const members: ApiChatMember[] = [];
   const adminMembersById: Record<string, ApiChatMember> = {};
-  room.getJoinedMembers().forEach((member) => {
+  getRoomMembers(room).forEach((member) => {
     const apiMember = buildApiChatMember(member, room);
     members.push(apiMember);
     if (apiMember.isAdmin || apiMember.isOwner) adminMembersById[apiMember.userId] = apiMember;
@@ -489,7 +491,7 @@ export async function fetchFullChat(chat: ApiChat) {
   await room.loadMembersIfNeeded().catch(() => undefined);
   const { members, adminMembersById } = buildMembers(room);
   const topic = room.currentState.getStateEvents(EventType.RoomTopic, '')?.getContent()?.topic;
-  const { userStatusesById } = buildUsers(room.getJoinedMembers().map(({ userId }) => userId), room);
+  const { userStatusesById } = buildUsers(getRoomMembers(room).map(({ userId }) => userId), room);
   const fullChat = buildChat(room);
   // A channel with comments links to its discussion chat, which links back
   const isCommentsChat = isCommentsChatId(chat.id);
@@ -513,7 +515,7 @@ export async function fetchFullChat(chat: ApiChat) {
     chats: commentsChat && !isCommentsChat ? [fullChat, commentsChat] : [fullChat],
     userStatusesById,
     groupCall: undefined,
-    membersCount: room.getJoinedMemberCount(),
+    membersCount: getRoomMemberCount(room),
     isForumAsMessages: undefined,
   };
 }

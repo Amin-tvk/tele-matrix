@@ -361,6 +361,8 @@ export async function fetchCurrentApiUser(): Promise<ApiUser | undefined> {
 
 /* Direct chats */
 
+const DIRECT_SAVE_DELAY_MS = 2000;
+
 function getRoomActivityTs(room: Room) {
   return room.getLastActiveTimestamp() || 0;
 }
@@ -398,6 +400,18 @@ export function computeDirectRooms() {
       candidates.push([inviter, room]);
       return;
     }
+    // A direct chat this account accepted: the flag stays on the invite that the join replaced
+    const prevContent = memberEvent?.getPrevContent();
+    if (memberEvent?.getContent().membership === 'join' && prevContent?.membership === 'invite'
+      && prevContent.is_direct) {
+      const prevSender = memberEvent.getUnsigned().prev_sender;
+      const otherUserId = typeof prevSender === 'string' && prevSender !== myUserId ? prevSender
+        : getOtherPeople(room)[0];
+      if (otherUserId) {
+        candidates.push([otherUserId, room]);
+        return;
+      }
+    }
     // Rooms this account created as a direct chat, while the invite is still pending
     room.currentState.getStateEvents(EventType.RoomMember).forEach((event) => {
       const invitee = event.getStateKey();
@@ -417,7 +431,7 @@ export function computeDirectRooms() {
     const existingRoomId = dmRoomIdByUserId.get(userId);
     if (existingRoomId && existingRoomId !== room.roomId) {
       const existingRoom = client!.getRoom(existingRoomId);
-      if (existingRoom && getRoomActivityTs(existingRoom) >= getRoomActivityTs(room)) return;
+      if (existingRoom && compareDirectRooms(existingRoom, room, userId) >= 0) return;
       dmUserIdByRoomId.delete(existingRoomId);
     }
     dmUserIdByRoomId.set(room.roomId, userId);
@@ -431,8 +445,52 @@ export function computeDirectRooms() {
     if (announcedChatIds.delete(groupChatId)) onUpdate({ '@type': 'updateChatLeave', id: groupChatId });
   });
 
+  rememberDirectRooms(direct);
+
   return previous.size !== dmUserIdByRoomId.size
     || [...dmUserIdByRoomId].some(([roomId, userId]) => previous.get(roomId) !== userId);
+}
+
+function getOtherPeople(room: Room) {
+  return [...room.getJoinedMembers(), ...room.getMembersWithMembership('invite')]
+    .map(({ userId }) => userId)
+    .filter((userId) => userId !== myUserId);
+}
+
+// When two direct chats with one person exist (both started one before the other's invite arrived), both sides
+// settle on the same room: the one they are both in, then the newer one
+function compareDirectRooms(a: Room, b: Room, userId: string) {
+  const isJoined = (room: Room) => Number(room.getMember(userId)?.membership === 'join'
+    && room.getMyMembership() === 'join');
+  return (isJoined(a) - isJoined(b)) || (getRoomActivityTs(a) - getRoomActivityTs(b));
+}
+
+// Direct chats recognized from their invites are saved in `m.direct` too, or after a reload (and in other apps)
+// they would look like groups and starting a chat with the same person would make another room
+let directSaveTimeout: ReturnType<typeof setTimeout> | undefined;
+
+function rememberDirectRooms(direct: Record<string, unknown>) {
+  const missing = [...dmRoomIdByUserId].filter(([userId, roomId]) => {
+    const roomIds = direct[userId];
+    return userId !== myUserId && client?.getRoom(roomId)?.getMyMembership() === 'join'
+      && !(Array.isArray(roomIds) && roomIds.includes(roomId));
+  });
+  if (!missing.length || directSaveTimeout) return;
+  directSaveTimeout = setTimeout(() => {
+    directSaveTimeout = undefined;
+    if (!client) return;
+    const content = { ...(client.getAccountData(EventType.Direct)?.getContent() || {}) } as Record<string, string[]>;
+    let isChanged = false;
+    dmRoomIdByUserId.forEach((roomId, userId) => {
+      const roomIds = Array.isArray(content[userId]) ? content[userId] : [];
+      if (userId === myUserId || roomIds.includes(roomId) || client!.getRoom(roomId)?.getMyMembership() !== 'join') {
+        return;
+      }
+      content[userId] = [roomId, ...roomIds];
+      isChanged = true;
+    });
+    if (isChanged) void client.setAccountData(EventType.Direct, content).catch(() => undefined);
+  }, DIRECT_SAVE_DELAY_MS);
 }
 
 export function getDmUserId(room: Room) {
