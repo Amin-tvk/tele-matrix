@@ -10,7 +10,7 @@ import { ARE_PHONE_CALLS_SUPPORTED } from '../../../util/browser/windowEnvironme
 import buildClassName from '../../../util/buildClassName';
 import {
   getMatrixGroupCallMyKey, joinMatrixGroupCall, leaveMatrixGroupCall, MAX_GROUP_CALL_PARTICIPANTS,
-  toggleMatrixGroupCallMute,
+  setMatrixGroupCallScreenOpen, toggleMatrixGroupCallMute,
 } from '../../../util/calls/matrixGroupCall';
 import { isUserId } from '../../../util/entities/ids';
 import { callApi } from '../../../api/gramjs';
@@ -37,14 +37,19 @@ type StateProps = {
 };
 
 const MAX_AVATARS = 4;
+const REFRESH_INTERVAL_MS = 30 * 1000;
 
 const MatrixGroupCallPill = ({
   chatId, chat, callChat, callInfo, active, usersById,
 }: OwnProps & StateProps) => {
   const isGroup = Boolean(chat) && !isUserId(chatId) && !isChatChannel(chat);
 
+  // Asks the server while the group is open; live events cover most changes, this catches what they miss
   useEffect(() => {
-    if (isGroup && ARE_PHONE_CALLS_SUPPORTED) void callApi('fetchMatrixGroupCall', { chatId });
+    if (!isGroup || !ARE_PHONE_CALLS_SUPPORTED) return undefined;
+    void callApi('fetchMatrixGroupCall', { chatId });
+    const interval = setInterval(() => void callApi('fetchMatrixGroupCall', { chatId }), REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, [chatId, isGroup]);
 
   const isJoinedHere = active?.chatId === chatId;
@@ -68,7 +73,10 @@ const MatrixGroupCallPill = ({
   return (
     <div className={styles.root}>
       <Icon name="voice-chat" className={styles.icon} />
-      <div className={styles.info}>
+      <div
+        className={buildClassName(styles.info, active && styles.clickable)}
+        onClick={active ? () => setMatrixGroupCallScreenOpen(true) : undefined}
+      >
         <div className={styles.title}>
           {isJoinedElsewhere ? `Voice chat · ${callChat?.title || ''}` : 'Voice chat'}
         </div>

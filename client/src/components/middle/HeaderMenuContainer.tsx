@@ -47,9 +47,10 @@ import {
   selectUser,
   selectUserFullInfo,
 } from '../../global/selectors';
+import { joinMatrixGroupCall } from '../../util/calls/matrixGroupCall';
 import { isUserId } from '../../util/entities/ids';
-import { callApi } from '../../api/gramjs';
 import { disableScrolling } from '../../util/scrollLock';
+import { callApi } from '../../api/gramjs';
 import { buildAutoDeletePeriodOptions, DEFAULT_AUTO_DELETE_PERIODS } from '../common/helpers/autoDeletePeriods';
 
 import useAppLayout from '../../hooks/useAppLayout';
@@ -91,6 +92,7 @@ export type OwnProps = {
   canSubscribe?: boolean;
   canSearch?: boolean;
   canCall?: boolean;
+  canVoiceChat?: boolean;
   canMute?: boolean;
   canViewStatistics?: boolean;
   canViewBoosts?: boolean;
@@ -164,6 +166,7 @@ const HeaderMenuContainer = ({
   canReportChat,
   canSearch,
   canCall,
+  canVoiceChat,
   canMute,
   canViewStatistics,
   canViewMonetization,
@@ -767,6 +770,17 @@ const HeaderMenuContainer = ({
               onClick={handleCall}
             >
               {lang('Call')}
+            </MenuItem>
+          )}
+          {isMobile && canVoiceChat && (
+            <MenuItem
+              icon="voice-chat"
+              onClick={() => {
+                closeMenu();
+                void joinMatrixGroupCall(chatId);
+              }}
+            >
+              Voice chat
             </MenuItem>
           )}
           {canCall && (

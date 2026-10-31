@@ -33,6 +33,9 @@ type Peer = {
   candidatesTimeout?: ReturnType<typeof setTimeout>;
   reconnectTimeout?: ReturnType<typeof setTimeout>;
   isConnected?: boolean;
+  isMuted?: boolean;
+  // Seen in the participant list; one that only greeted may not be in it yet
+  isListed?: boolean;
 };
 
 type ActiveCall = {
@@ -42,11 +45,14 @@ type ActiveCall = {
   localStream: MediaStream;
   iceServers: RTCIceServer[];
   peers: Map<string, Peer>;
+  // Participants told that this device joined, who make the offer to it
+  greetedKeys: Set<string>;
   pingInterval?: ReturnType<typeof setInterval>;
   speakingInterval?: ReturnType<typeof setInterval>;
   audioContext?: AudioContext;
   localAnalyser?: AnalyserNode;
   isMuted: boolean;
+  isSoundOff: boolean;
 };
 
 let active: ActiveCall | undefined;
@@ -66,7 +72,10 @@ function setActiveState(update?: Partial<ActiveState>) {
     chatId: active.chatId,
     callId: active.callId,
     isMuted: active.isMuted,
+    isScreenOpen: groupCalls.active?.isScreenOpen ?? true,
+    isSoundOff: active.isSoundOff,
     connectedKeys: [...active.peers.values()].filter((peer) => peer.isConnected).map((peer) => peer.key),
+    mutedKeys: [...active.peers.values()].filter((peer) => peer.isMuted).map((peer) => peer.key),
     speakingKeys: groupCalls.active?.speakingKeys || [],
     ...update,
   } : undefined;
@@ -96,12 +105,24 @@ function reconcilePeers() {
   const otherKeys = new Set(others.map(({ userId, deviceId }) => keyOf(userId, deviceId)));
 
   current.peers.forEach((peer, key) => {
-    if (!otherKeys.has(key)) closePeer(key, false);
+    if (otherKeys.has(key)) {
+      peer.isListed = true;
+    } else if (peer.isListed) {
+      closePeer(key, false);
+    }
   });
   others.forEach(({ userId, deviceId }) => {
     const key = keyOf(userId, deviceId);
-    if (current.peers.has(key) || current.myKey > key) return;
-    void startPeer(userId, deviceId, true);
+    if (current.peers.has(key)) return;
+    if (current.myKey < key) {
+      void startPeer(userId, deviceId, true);
+    } else if (!current.greetedKeys.has(key)) {
+      // They make the offer; this tells them not to wait for this device's join to reach them
+      current.greetedKeys.add(key);
+      void callApi('sendMatrixGroupCallSignal', {
+        userId, deviceId, content: { type: 'hello', call_id: current.callId },
+      });
+    }
   });
 }
 
@@ -141,6 +162,7 @@ function createPeer(userId: string, deviceId: string, isInitiator: boolean) {
       peer.audio.autoplay = true;
     }
     peer.audio.srcObject = remoteStream;
+    peer.audio.muted = current.isSoundOff;
     void peer.audio.play().catch(() => undefined);
     peer.analyser = createAnalyser(remoteStream);
   };
@@ -148,7 +170,10 @@ function createPeer(userId: string, deviceId: string, isInitiator: boolean) {
   connection.onconnectionstatechange = () => {
     if (active !== current) return;
     const { connectionState } = connection;
+    const wasConnected = peer.isConnected;
     peer.isConnected = connectionState === 'connected';
+    // The other side learns whether this device is muted
+    if (peer.isConnected && !wasConnected) void sendSignal(peer, { type: 'state', muted: current.isMuted });
     setActiveState({});
     if (connectionState === 'failed' && peer.isInitiator) {
       // Try again with a fresh connection; the other side follows the new offer
@@ -240,6 +265,14 @@ export async function handleMatrixGroupCallSignal(update: ApiUpdateMatrixGroupCa
     case 'hangup':
       closePeer(key, false);
       break;
+    case 'hello':
+      if (!peer && current.myKey < key) void startPeer(fromUserId, fromDeviceId, true);
+      break;
+    case 'state':
+      if (!peer) return;
+      peer.isMuted = Boolean(content.muted);
+      setActiveState({});
+      break;
     default:
   }
 }
@@ -315,11 +348,13 @@ export async function joinMatrixGroupCall(chatId: string) {
     localStream,
     iceServers,
     peers: new Map(),
+    greetedKeys: new Set(),
     isMuted: false,
+    isSoundOff: false,
   };
   active.localAnalyser = createAnalyser(localStream);
   active.speakingInterval = setInterval(checkSpeaking, SPEAKING_CHECK_MS);
-  setActiveState({ speakingKeys: [] });
+  setActiveState({ speakingKeys: [], isScreenOpen: true });
 
   const current = active;
   await callApi('sendMatrixGroupCallMember', {
@@ -350,11 +385,38 @@ export function toggleMatrixGroupCallMute() {
   active.localStream.getAudioTracks().forEach((track) => {
     track.enabled = !active!.isMuted;
   });
+  active.peers.forEach((peer) => {
+    if (peer.isConnected) void sendSignal(peer, { type: 'state', muted: active!.isMuted });
+  });
   setActiveState({});
 }
 
 export function getMatrixGroupCallMyKey() {
   return active?.myKey;
+}
+
+export function toggleMatrixGroupCallSound() {
+  if (!active) return;
+  active.isSoundOff = !active.isSoundOff;
+  active.peers.forEach((peer) => {
+    if (peer.audio) peer.audio.muted = active!.isSoundOff;
+  });
+  setActiveState({});
+}
+
+export function setMatrixGroupCallScreenOpen(isScreenOpen: boolean) {
+  if (active) setActiveState({ isScreenOpen });
+}
+
+// Voice levels right now (0 to about 0.3), read by the call screen on every frame; muted is silent
+export function getMatrixGroupCallLevels() {
+  const levels: Record<string, number> = {};
+  if (!active) return levels;
+  levels[active.myKey] = !active.isMuted && active.localAnalyser ? getLevel(active.localAnalyser) : 0;
+  active.peers.forEach((peer) => {
+    levels[peer.key] = peer.analyser ? getLevel(peer.analyser) : 0;
+  });
+  return levels;
 }
 
 // Leaving the page leaves the call, so others don't wait for this device to time out

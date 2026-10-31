@@ -61,6 +61,7 @@ import { PANE_GAP_REM, type PaneState } from '../middle/hooks/useHeaderPane';
 
 import ActiveCallHeader from '../calls/ActiveCallHeader.async';
 import GroupCall from '../calls/group/GroupCall.async';
+import MatrixGroupCallScreen from '../calls/matrix/MatrixGroupCallScreen';
 import PhoneCall from '../calls/phone/PhoneCall.async';
 import RatePhoneCallModal from '../calls/phone/RatePhoneCallModal.async';
 import CustomEmojiSetsModal from '../common/CustomEmojiSetsModal.async';
@@ -679,6 +680,7 @@ const Main = ({
       {IS_WAVE_TRANSFORM_SUPPORTED && <WaveContainer />}
       <SnapEffectContainer />
       <PhoneCall isActive={isPhoneCallActive} />
+      <MatrixGroupCallScreen />
       <UnreadCount isForAppBadge />
       <RatePhoneCallModal isOpen={isRatePhoneCallModalOpen} />
       <BotTrustModal

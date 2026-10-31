@@ -336,9 +336,14 @@ export type GlobalState = {
       chatId: string;
       callId: string;
       isMuted: boolean;
+      // The full-screen voice chat; minimized it is a bar over the chat
+      isScreenOpen: boolean;
+      // Everyone else silenced on this device
+      isSoundOff: boolean;
       // Participants (`userId|deviceId`) with a live connection, and those currently speaking
       connectedKeys: string[];
       speakingKeys: string[];
+      mutedKeys: string[];
     };
   };
 

@@ -39,6 +39,7 @@
 
 .subtitle {
   overflow: hidden;
+
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
   text-overflow: ellipsis;
@@ -69,4 +70,8 @@
   display: flex;
   flex-shrink: 0;
   gap: 0.25rem;
+}
+
+.clickable {
+  cursor: pointer;
 }

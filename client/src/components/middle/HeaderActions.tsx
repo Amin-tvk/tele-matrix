@@ -418,6 +418,7 @@ const HeaderActions = ({
           canSubscribe={isForForum ? canSubscribe : undefined}
           canSearch={canSearch}
           canCall={canCall}
+          canVoiceChat={canVoiceChat}
           canMute={canMute}
           canViewStatistics={canViewStatistics}
           canViewBoosts={canViewBoosts}

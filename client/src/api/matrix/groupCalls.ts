@@ -1,8 +1,8 @@
-import type { MatrixEvent, Room } from 'matrix-js-sdk';
-import { Method } from 'matrix-js-sdk';
+import type { Room } from 'matrix-js-sdk';
+import { MatrixEvent, Method } from 'matrix-js-sdk';
 
 import {
-  getChatIdForRoom, getClient, getMyUserId, hasClient, onUpdate, sendMessageUpdate,
+  buildUser, getChatIdForRoom, getClient, getMyUserId, hasClient, onUpdate, sendMessageUpdate,
 } from './client';
 import { GROUP_CALL_MEMBER_EVENT, GROUP_CALL_SIGNAL_EVENT } from './constants';
 import { getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId } from './ids';
@@ -48,6 +48,11 @@ function getRoomForChat(chatId: string) {
 function announce(room: Room) {
   const info = callsByRoomId.get(room.roomId);
   const members = info ? [...info.members.values()] : [];
+  // The call screen shows everyone by name, including people this device hasn't seen yet
+  new Set(members.map(({ userId }) => userId)).forEach((userId) => {
+    const user = buildUser(userId, room);
+    onUpdate({ '@type': 'updateUser', id: user.id, user });
+  });
   onUpdate({
     '@type': 'updateMatrixGroupCall',
     chatId: getChatIdForRoom(room),
@@ -161,10 +166,34 @@ export function getGroupCallDuration(room: Room, callId: string, startTs: number
 
 /* Methods for the main thread */
 
-export function fetchMatrixGroupCall({ chatId }: { chatId: string }) {
+type RawEvent = ConstructorParameters<typeof MatrixEvent>[0];
+
+// The server's latest call events for the room: the local history may not have them after a cold start or a gap
+async function fetchRecentMemberEvents(room: Room) {
+  const filter = JSON.stringify({ types: [GROUP_CALL_MEMBER_EVENT] });
+  const { chunk } = await getClient().http.authedRequest<{ chunk: RawEvent[] }>(
+    Method.Get, `/rooms/${encodeURIComponent(room.roomId)}/messages`,
+    { dir: 'b', limit: String(SCAN_EVENTS_LIMIT), filter },
+  );
+  return chunk.map((raw) => new MatrixEvent(raw)).reverse();
+}
+
+export async function fetchMatrixGroupCall({ chatId }: { chatId: string }) {
   const room = getRoomForChat(chatId);
   if (!room) return undefined;
-  scanRoom(room);
+  try {
+    const events = await fetchRecentMemberEvents(room);
+    const now = Date.now();
+    const previous = callsByRoomId.get(room.roomId);
+    callsByRoomId.delete(room.roomId);
+    events.forEach((event) => applyMemberEvent(room, event, now));
+    pruneRoom(room, now);
+    // Keep where the call's entry is, if the server's page didn't reach back to it
+    const info = callsByRoomId.get(room.roomId);
+    if (info && !info.startEventId && previous?.callId === info.callId) info.startEventId = previous.startEventId;
+  } catch {
+    scanRoom(room);
+  }
   announce(room);
   startPruning();
   const info = callsByRoomId.get(room.roomId);
