@@ -1,0 +1,48 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.5rem 0;
+  text-align: center;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+
+  font-size: 2.5rem;
+  color: var(--color-white);
+
+  background: var(--color-error);
+}
+
+.countdown {
+  font-size: 3rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  color: var(--color-error);
+}
+
+.text {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}

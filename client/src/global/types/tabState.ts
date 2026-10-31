@@ -303,6 +303,7 @@ export type TabState = {
   };
 
   serverAdminModal?: {};
+  emergencyAlertModal?: {};
 
   storyComposerModal?: {};
 

@@ -29,6 +29,7 @@ import CollectibleInfoModal from './collectible/CollectibleInfoModal.async';
 import DeleteAccountModal from './deleteAccount/DeleteAccountModal.async';
 import DeleteMemberModal from './deleteMember/DeleteMemberModal.async';
 import DisableSharingAboutModal from './disableSharing/DisableSharingAboutModal.async';
+import EmergencyAlertModal from './emergency/EmergencyAlertModal';
 import EmojiStatusAccessModal from './emojiStatusAccess/EmojiStatusAccessModal.async';
 import DeviceVerificationModal from './encryptionRecovery/DeviceVerificationModal';
 import EncryptionRecoveryModal from './encryptionRecovery/EncryptionRecoveryModal';
@@ -80,7 +81,6 @@ import ReportAdModal from './reportAd/ReportAdModal.async';
 import ReportModal from './reportModal/ReportModal.async';
 import RequestPeerModal from './requestPeer/RequestPeerModal.async';
 import ServerAdminModal from './serverAdmin/ServerAdminModal';
-import StoryComposerModal from './storyComposer/StoryComposerModal';
 import SharePreparedMessageModal from './sharePreparedMessage/SharePreparedMessageModal.async';
 import ChatRefundModal from './stars/chatRefund/ChatRefundModal.async';
 import StarsGiftModal from './stars/gift/StarsGiftModal.async';
@@ -88,6 +88,7 @@ import StarsBalanceModal from './stars/StarsBalanceModal.async';
 import StarsPaymentModal from './stars/StarsPaymentModal.async';
 import StarsSubscriptionModal from './stars/subscription/StarsSubscriptionModal.async';
 import StarsTransactionInfoModal from './stars/transaction/StarsTransactionModal.async';
+import StoryComposerModal from './storyComposer/StoryComposerModal';
 import StealthModeModal from './storyStealthMode/StealthModeModal.async';
 import SuggestedPostApprovalModal from './suggestedPostApproval/SuggestedPostApprovalModal.async';
 import SuggestedStatusModal from './suggestedStatus/SuggestedStatusModal.async';
@@ -138,6 +139,7 @@ type ModalKey = keyof Pick<TabState,
   'encryptionRecoveryModal' |
   'deviceVerificationModal' |
   'serverAdminModal' |
+  'emergencyAlertModal' |
   'storyComposerModal' |
   'giftPreviewModal' |
   'giftUpgradeModal' |
@@ -287,6 +289,7 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   encryptionRecoveryModal: EncryptionRecoveryModal,
   deviceVerificationModal: DeviceVerificationModal,
   serverAdminModal: ServerAdminModal,
+  emergencyAlertModal: EmergencyAlertModal,
   storyComposerModal: StoryComposerModal,
   giftPreviewModal: GiftPreviewModal,
   giftUpgradeModal: GiftUpgradeModal,

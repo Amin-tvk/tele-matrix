@@ -99,6 +99,7 @@ const LeftSideMenuItems = ({
     openSettingsScreen,
     openWalletModal,
     openStoryComposerModal,
+    openEmergencyAlertModal,
   } = getActions();
   const lang = useLang();
   const [isSwitchToWebKDialogOpen, openSwitchToWebKDialog, closeSwitchToWebKDialog] = useFlag();
@@ -251,6 +252,13 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuSettings')}
       </MenuItem>
+      <MenuItem
+        icon="warning"
+        destructive
+        onClick={() => openEmergencyAlertModal()}
+      >
+        Emergency alert
+      </MenuItem>
       <NestedMenuItem
         icon="more"
         footer={footer}
@@ -277,37 +285,37 @@ const LeftSideMenuItems = ({
             </MenuItem>
             {IS_TELEGRAM_SERVICES_ENABLED && (
               <>
-              <MenuSeparator />
-              <MenuItem
-                icon="help"
-                onClick={handleOpenTipsChat}
-              >
-                {lang('MenuTelegramFeatures')}
-              </MenuItem>
-              <MenuItem
-                icon="bug"
-                onClick={handleBugReportClick}
-              >
-                {lang('MenuReportBug')}
-              </MenuItem>
-              {IS_BETA && (
+                <MenuSeparator />
                 <MenuItem
-                  icon="permissions"
-                  onClick={handleChangelogClick}
+                  icon="help"
+                  onClick={handleOpenTipsChat}
                 >
-                  {lang('MenuBetaChangelog')}
+                  {lang('MenuTelegramFeatures')}
                 </MenuItem>
-              )}
-              {withOtherVersions && (
                 <MenuItem
-                  icon="K"
-                  isCharIcon
-                  href={`${WEB_VERSION_BASE}k`}
-                  onClick={handleSwitchToWebK}
+                  icon="bug"
+                  onClick={handleBugReportClick}
                 >
-                  {lang('MenuSwitchToK')}
+                  {lang('MenuReportBug')}
                 </MenuItem>
-              )}
+                {IS_BETA && (
+                  <MenuItem
+                    icon="permissions"
+                    onClick={handleChangelogClick}
+                  >
+                    {lang('MenuBetaChangelog')}
+                  </MenuItem>
+                )}
+                {withOtherVersions && (
+                  <MenuItem
+                    icon="K"
+                    isCharIcon
+                    href={`${WEB_VERSION_BASE}k`}
+                    onClick={handleSwitchToWebK}
+                  >
+                    {lang('MenuSwitchToK')}
+                  </MenuItem>
+                )}
               </>
             )}
             {canInstall && (

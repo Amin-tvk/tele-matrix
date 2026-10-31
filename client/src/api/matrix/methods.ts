@@ -213,6 +213,11 @@ async function ensureRoomForChat(chat: ApiChat) {
   return room;
 }
 
+// The direct chat with a person, created when there is none yet
+export function ensureDirectRoomForUser(userId: string) {
+  return ensureRoomForChat({ id: getPeerIdByUserId(userId) } as ApiChat);
+}
+
 function collectUserIds(events: MatrixEvent[]) {
   const userIds = new Set<string>();
   events.forEach((event) => {

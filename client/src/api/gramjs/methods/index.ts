@@ -13,6 +13,9 @@ export {
   acceptDeviceVerification, cancelDeviceVerification, confirmDeviceVerification, requestDeviceVerification,
 } from '../../matrix/verification';
 export { setMyBadgeEmoji, setPeerVerified } from '../../matrix/verifiedBadges';
+export {
+  fetchEmergencyRecipients, sendEmergencyAlert, setEmergencyRecipients,
+} from '../../matrix/emergency';
 export { setChannelComments } from '../../matrix/methods';
 export { sendStory } from '../../matrix/stories';
 export {

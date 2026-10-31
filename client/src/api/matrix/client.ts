@@ -60,6 +60,7 @@ import {
   isUserPeerId,
 } from './ids';
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
+import { ensureEmergencyRegistry } from './emergency';
 import { abortOverdueSync, fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { handleReactionUsageAccountData } from './reactionUsage';
 import { getRoomTtlSeconds, isExpiredEvent } from './retention';
@@ -991,6 +992,7 @@ function handleSync(state: SyncState, prevState: SyncState | null) {
     startVerifiedBadgesPolling();
     startExpirySweep();
     startBackupRecheck();
+    void ensureEmergencyRegistry();
     syncDeferred.resolve();
     // The config may have been loaded before the account data arrived
     onUpdate({ '@type': 'updateConfig' });

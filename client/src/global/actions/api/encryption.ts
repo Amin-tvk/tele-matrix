@@ -122,6 +122,16 @@ addActionHandler('closeServerAdminModal', (global, actions, payload): ActionRetu
   return updateTabState(global, { serverAdminModal: undefined }, tabId);
 });
 
+addActionHandler('openEmergencyAlertModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  return updateTabState(global, { emergencyAlertModal: {} }, tabId);
+});
+
+addActionHandler('closeEmergencyAlertModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  return updateTabState(global, { emergencyAlertModal: undefined }, tabId);
+});
+
 // People with the blue tick post stories from this window
 addActionHandler('openStoryComposerModal', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};

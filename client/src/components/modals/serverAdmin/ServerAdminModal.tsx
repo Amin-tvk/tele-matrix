@@ -68,6 +68,8 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
   const [channelQuery, setChannelQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
   const [isBusy, setIsBusy] = useState(false);
+  const [emergency, setEmergency] = useState<{ userIds: string[]; isDefault: boolean } | undefined>();
+  const [newEmergencyContact, setNewEmergencyContact] = useState('');
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>();
   const [inviteToDelete, setInviteToDelete] = useState<string | undefined>();
 
@@ -124,6 +126,34 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
   useEffect(() => {
     if (isOpen && activeTab === 1 && !channels) void loadChannels('');
   }, [isOpen, activeTab, channels]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 3 || emergency) return;
+    void tryApi(callApi('fetchEmergencyRecipients')).then((result) => {
+      setEmergency(result || { userIds: [], isDefault: true });
+    });
+  }, [isOpen, activeTab, emergency]);
+
+  const saveEmergencyContacts = useLastCallback(async (userIds: string[]) => {
+    setIsBusy(true);
+    const saved = await tryApi(callApi('setEmergencyRecipients', { userIds }));
+    setIsBusy(false);
+    if (!saved) {
+      showNotification({ message: 'Could not save the emergency contacts' });
+      return;
+    }
+    // An empty list falls back to the admins, which the server reports back
+    setEmergency(saved.length ? { userIds: saved, isDefault: false } : undefined);
+  });
+
+  const handleAddEmergencyContact = useLastCallback((e: FormEvent) => {
+    e.preventDefault();
+    const contact = newEmergencyContact.trim();
+    if (!contact) return;
+    const current = emergency && !emergency.isDefault ? emergency.userIds : [];
+    setNewEmergencyContact('');
+    void saveEmergencyContacts([...current, contact]);
+  });
 
   const handleToggleChannelVerified = useLastCallback(async (channel: AdminChannel) => {
     setIsBusy(true);
@@ -451,6 +481,51 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
     );
   }
 
+  function renderEmergency() {
+    return (
+      <div className={styles.section}>
+        <form className={styles.inviteForm} onSubmit={handleAddEmergencyContact}>
+          <InputText
+            id="admin-emergency-contact"
+            label="Username or Matrix ID"
+            value={newEmergencyContact}
+            onChange={(e) => setNewEmergencyContact(e.target.value)}
+          />
+          <Button type="submit" size="smaller" isLoading={isBusy}>Add</Button>
+        </form>
+        <div className={styles.hint}>
+          {emergency?.isDefault
+            ? 'Nobody is named yet, so emergency alerts go to these admins. Add people to choose who gets them.'
+            : 'Anyone who presses Emergency alert in the menu sends a direct message to these people.'}
+        </div>
+        {!emergency ? <Loading /> : !emergency.userIds.length ? (
+          <div className={styles.empty}>Nobody receives emergency alerts yet</div>
+        ) : (
+          <div className={styles.list}>
+            {emergency.userIds.map((userId) => (
+              <ListItem
+                key={userId}
+                icon="user"
+                rightElement={emergency.isDefault ? undefined : (
+                  <Button
+                    round
+                    size="smaller"
+                    color="translucent"
+                    iconName="delete"
+                    ariaLabel={lang('Delete')}
+                    onClick={() => void saveEmergencyContacts(emergency.userIds.filter((id) => id !== userId))}
+                  />
+                )}
+              >
+                <span className="title">{userId}</span>
+              </ListItem>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderInvites() {
     return (
       <div className={styles.section}>
@@ -584,6 +659,7 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
     { title: lang('MatrixAdminUsers') },
     { title: lang('PeyvandAdminChannels') },
     { title: lang('MatrixAdminInvites') },
+    { title: 'Emergency' },
   ], [lang]);
 
   return (
@@ -599,7 +675,8 @@ const ServerAdminModal = ({ modal, usersById }: OwnProps & StateProps) => {
       {selectedUser ? renderUserDetails(selectedUser) : (
         <>
           <TabList tabs={tabs} activeTab={activeTab} onSwitchTab={setActiveTab} className={styles.tabs} />
-          {activeTab === 0 ? renderUsers() : activeTab === 1 ? renderChannels() : renderInvites()}
+          {activeTab === 0 ? renderUsers() : activeTab === 1 ? renderChannels()
+            : activeTab === 2 ? renderInvites() : renderEmergency()}
         </>
       )}
       <ConfirmDialog
