@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The release key stays on the build machine; keystore.properties points at it (see README)
+def keystoreFile = rootProject.file(System.getenv('PEYVAND_KEYSTORE_PROPERTIES') ?: 'keystore.properties')
+def keystore = new Properties()
+if (keystoreFile.exists()) keystoreFile.withInputStream { keystore.load(it) }
+
+android {
+    namespace 'com.pocketcalc.app'
+    compileSdk 35
+
+    defaultConfig {
+        // A neutral ID, since it shows in the phone's app info
+        applicationId 'com.pocketcalc.app'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'APP_URL', "\"${System.getenv('PEYVAND_APP_URL') ?: 'https://tele.peyvand-yar.ir/'}\""
+    }
+
+    signingConfigs {
+        release {
+            if (keystore['storeFile']) {
+                storeFile file(keystore['storeFile'])
+                storePassword keystore['storePassword']
+                keyAlias keystore['keyAlias']
+                keyPassword keystore['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystore['storeFile'] ? signingConfigs.release : null
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

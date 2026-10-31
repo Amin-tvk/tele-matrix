@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="calc_background">#FF17181C</color>
+    <color name="calc_display_text">#FFF2F3F5</color>
+    <color name="calc_preview_text">#FF8E9099</color>
+    <color name="calc_digit">#FF2A2C33</color>
+    <color name="calc_function">#FF3D404A</color>
+    <color name="calc_operator">#FF33415C</color>
+    <color name="calc_accent">#FFF0A23B</color>
+    <color name="icon_background">#FF2F3A4F</color>
+</resources>

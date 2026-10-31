@@ -29,6 +29,17 @@ type StateProps = {
 type EncryptionStatus = Awaited<ReturnType<typeof callApi<'fetchEncryptionStatus'>>>;
 
 const MINUTE_MS = 60 * 1000;
+const CALCULATOR_LOCK_EVENT = 'peyvandcalculatorlock';
+
+// Set by the Android app (the calculator APK), which runs Tele inside itself
+type AndroidBridge = {
+  isCalculatorLockOn: () => boolean;
+  openCalculatorLock: () => void;
+};
+
+function getAndroidBridge() {
+  return (window as Window & { PeyvandAndroid?: AndroidBridge }).PeyvandAndroid;
+}
 
 function formatAutolock(duration?: number) {
   if (!duration) return 'Never locks by itself';
@@ -53,6 +64,8 @@ const SettingsSecurity = ({
   const { openSettingsScreen, openEncryptionRecoveryModal, lockScreen } = getActions();
   const lang = useLang();
   const [status, setStatus] = useState<EncryptionStatus>();
+  const android = getAndroidBridge();
+  const [isCalculatorLockOn, setIsCalculatorLockOn] = useState(() => Boolean(android?.isCalculatorLockOn()));
 
   useHistoryBack({ isActive, onBack: onReset });
 
@@ -60,6 +73,13 @@ const SettingsSecurity = ({
     if (!isActive) return;
     void callApi('fetchEncryptionStatus').then(setStatus);
   }, [isActive]);
+
+  useEffect(() => {
+    if (!android) return undefined;
+    const update = () => setIsCalculatorLockOn(android.isCalculatorLockOn());
+    window.addEventListener(CALCULATOR_LOCK_EVENT, update);
+    return () => window.removeEventListener(CALCULATOR_LOCK_EVENT, update);
+  }, [android]);
 
   const isDeviceVerified = status?.isAvailable && status.isDeviceVerified;
 
@@ -90,6 +110,27 @@ const SettingsSecurity = ({
         {hasPasscode && (
           <ListItem icon="lock" iconBg="gray" narrow onClick={() => lockScreen()}>
             <span className="title">Lock now</span>
+          </ListItem>
+        )}
+        {android && (
+          <ListItem
+            icon="eye-crossed"
+            iconBg="orange"
+            multiline
+            narrow
+            onClick={() => android.openCalculatorLock()}
+            rightElement={(
+              <span className="settings-item__current-value">
+                {lang(isCalculatorLockOn ? 'SettingsItemPrivacyOn' : 'SettingsItemPrivacyOff')}
+              </span>
+            )}
+          >
+            <span className="title">Calculator lock</span>
+            <span className="subtitle">
+              {isCalculatorLockOn
+                ? 'The app opens as a calculator until you type your calculation'
+                : 'Open as a calculator, and show Tele only after your own calculation'}
+            </span>
           </ListItem>
         )}
       </Island>
