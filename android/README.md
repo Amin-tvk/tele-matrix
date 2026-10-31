@@ -24,6 +24,8 @@ The build runs in Docker. It needs:
 
 Keep the signing key off GitHub. Every update has to be signed with the same key, or Android refuses to install it over the old app.
 
+To publish an update on the live site, copy `calculator.apk` to the client's `public/` folder (on the production server, `/opt/tele/src/public/`) and rebuild the client. It is served at `/calculator.apk`.
+
 `PEYVAND_APP_URL` sets the Tele address the app loads. It defaults to `https://tele.peyvand-yar.ir/`.
 
 ## Limits
