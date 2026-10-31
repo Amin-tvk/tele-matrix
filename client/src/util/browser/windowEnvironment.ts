@@ -65,7 +65,9 @@ export const IS_PWA = (
 
 export const IS_APP = IS_PWA || IS_TAURI;
 
-export const IS_TOUCH_ENV = window.matchMedia('(pointer: coarse)').matches;
+// The Android app is always a phone, even where the WebView reports a fine pointer
+export const IS_ANDROID_APP = navigator.userAgent.includes('PeyvandAndroid/');
+export const IS_TOUCH_ENV = window.matchMedia('(pointer: coarse)').matches || IS_ANDROID_APP;
 export const IS_VOICE_RECORDING_SUPPORTED = Boolean(
   window.navigator.mediaDevices && 'getUserMedia' in window.navigator.mediaDevices && (
     window.AudioContext || (window as any).webkitAudioContext

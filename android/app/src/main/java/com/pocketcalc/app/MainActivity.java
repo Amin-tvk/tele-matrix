@@ -3,39 +3,61 @@ package com.pocketcalc.app;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
+import android.webkit.ServiceWorkerClient;
+import android.webkit.ServiceWorkerController;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 // Opens as a calculator once the user has picked a calculation; typing it and pressing "=" shows Tele.
-// Leaving the app hides Tele behind the calculator again. Without a calculation set, Tele opens directly
+// Leaving the app hides Tele behind the calculator again. Without a calculation set, Tele opens directly.
+// Tele itself ships inside the app (see WebAssets) and only talks to the Matrix server
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int PERMISSION_REQUEST = 2;
     private static final int LOCK_SETUP_REQUEST = 3;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 4;
+    private static final int TELE_DARK = 0xFF212121;
+    private static final int TELE_LIGHT = 0xFFFFFFFF;
+    private static final long UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L;
+    private static final String PREFS = "app";
 
     private FrameLayout root;
     private CalculatorView calculator;
     private WebView webView;
+    private WebAssets assets;
+    private FileSaver fileSaver;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingPermission;
+    private boolean isTeleDark = true;
     // Set while our own screens (file picker, lock setup) cover the app, so leaving for them doesn't lock
     private boolean isInOwnScreen;
 
@@ -45,6 +67,7 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setFitsSystemWindows(true);
         setContentView(root);
+        fileSaver = new FileSaver(this);
 
         calculator = new CalculatorView(this);
         calculator.setListener((keys) -> {
@@ -61,11 +84,13 @@ public class MainActivity extends Activity {
         createWebView();
         if (LockStore.isOn(this)) showCalculator();
         else showTele();
+        NotifyService.start(this);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        NotifyService.isTeleVisible = false;
         if (!isInOwnScreen && LockStore.isOn(this)) showCalculator();
     }
 
@@ -73,6 +98,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         isInOwnScreen = false;
+        if (webView.getVisibility() == View.VISIBLE) onTeleShown();
     }
 
     @Override
@@ -86,10 +112,11 @@ public class MainActivity extends Activity {
     }
 
     private void showCalculator() {
+        NotifyService.isTeleVisible = false;
         calculator.clear();
         calculator.setVisibility(View.VISIBLE);
         webView.setVisibility(View.INVISIBLE);
-        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+        setBarColors(getColor(R.color.calc_background), false);
         View focused = getCurrentFocus();
         if (focused != null) focused.clearFocus();
     }
@@ -98,6 +125,26 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.VISIBLE);
         calculator.setVisibility(View.GONE);
         webView.requestFocus();
+        onTeleShown();
+    }
+
+    private void onTeleShown() {
+        NotifyService.isTeleVisible = true;
+        NotifyService.clearMessages(this);
+        setBarColors(isTeleDark ? TELE_DARK : TELE_LIGHT, !isTeleDark);
+        checkForUpdate();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void setBarColors(int color, boolean isLight) {
+        Window window = getWindow();
+        window.setStatusBarColor(color);
+        window.setNavigationBarColor(color);
+        root.setBackgroundColor(color);
+        int flags = window.getDecorView().getSystemUiVisibility();
+        int lightFlags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            | (Build.VERSION.SDK_INT >= 26 ? View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
+        window.getDecorView().setSystemUiVisibility(isLight ? flags | lightFlags : flags & ~lightFlags);
     }
 
     // Recent apps would otherwise show a picture of the chats
@@ -114,7 +161,20 @@ public class MainActivity extends Activity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void createWebView() {
+        final String appHost = Uri.parse(BuildConfig.APP_URL).getHost();
+        assets = new WebAssets(this, appHost == null ? "" : appHost);
+        ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
+                return assets.respond(request);
+            }
+        });
+
         webView = new WebView(this);
+        webView.setBackgroundColor(TELE_DARK);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -125,12 +185,16 @@ public class MainActivity extends Activity {
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         webView.addJavascriptInterface(new Bridge(), "PeyvandAndroid");
 
-        final String appHost = Uri.parse(BuildConfig.APP_URL).getHost();
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assets.respond(request);
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                if (appHost != null && appHost.equals(uri.getHost())) return false;
+                if (appHost != null && appHost.equals(uri.getHost()) && !uri.getPath().endsWith(".apk")) return false;
                 // Links to other sites open in the browser
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, uri));
@@ -189,8 +253,18 @@ public class MainActivity extends Activity {
         requestPermissions(missing.toArray(new String[0]), PERMISSION_REQUEST);
     }
 
+    private void askForNotifications() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return;
+        requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+            NotifyService.start(this);
+            return;
+        }
         if (requestCode != PERMISSION_REQUEST || pendingPermission == null) return;
         boolean isGranted = results.length > 0;
         for (int result : results) isGranted &= result == PackageManager.PERMISSION_GRANTED;
@@ -211,7 +285,51 @@ public class MainActivity extends Activity {
         }
     }
 
-    // What Tele's settings page can call
+    // New versions of the app are announced in android-version.txt next to the APK on the website
+    private void checkForUpdate() {
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        long now = System.currentTimeMillis();
+        if (now - prefs.getLong("updateCheckedAt", 0) < UPDATE_CHECK_INTERVAL_MS) return;
+        prefs.edit().putLong("updateCheckedAt", now).apply();
+        new Thread(() -> {
+            try {
+                URL url = new URL(Uri.parse(BuildConfig.APP_URL).buildUpon().path("android-version.txt").build().toString());
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(15000);
+                int latest;
+                try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                    latest = Integer.parseInt(reader.readLine().trim());
+                } finally {
+                    connection.disconnect();
+                }
+                if (latest > BuildConfig.VERSION_CODE) runOnUiThread(this::offerUpdate);
+            } catch (Exception ignored) {
+                // Try again next time
+            }
+        }).start();
+    }
+
+    private void offerUpdate() {
+        if (isFinishing() || webView.getVisibility() != View.VISIBLE) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Update available")
+            .setMessage("A new version of the app is ready. Download it and open the file to install it; "
+                + "you stay signed in.")
+            .setPositiveButton("Download", (dialog, which) -> {
+                Uri apk = Uri.parse(BuildConfig.APP_URL).buildUpon().path("calculator.apk").build();
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, apk));
+                } catch (ActivityNotFoundException ignored) {
+                    // No browser
+                }
+            })
+            .setNegativeButton("Later", null)
+            .show();
+    }
+
+    // What Tele's pages can call
     private class Bridge {
         @JavascriptInterface
         public boolean isCalculatorLockOn() {
@@ -224,6 +342,67 @@ public class MainActivity extends Activity {
                 isInOwnScreen = true;
                 startActivityForResult(new Intent(MainActivity.this, LockSetupActivity.class), LOCK_SETUP_REQUEST);
             });
+        }
+
+        @JavascriptInterface
+        public void setMatrixSession(String sessionJson) {
+            if (!SessionStore.save(MainActivity.this, sessionJson)) return;
+            runOnUiThread(() -> {
+                NotifyService.start(MainActivity.this);
+                askForNotifications();
+            });
+        }
+
+        @JavascriptInterface
+        public void clearMatrixSession() {
+            SessionStore.clear(MainActivity.this);
+            runOnUiThread(() -> {
+                NotifyService.stop(MainActivity.this);
+                NotifyService.clearMessages(MainActivity.this);
+            });
+        }
+
+        @JavascriptInterface
+        public void setDarkTheme(boolean isDark) {
+            runOnUiThread(() -> {
+                isTeleDark = isDark;
+                webView.setBackgroundColor(isDark ? TELE_DARK : TELE_LIGHT);
+                if (webView.getVisibility() == View.VISIBLE) {
+                    setBarColors(isDark ? TELE_DARK : TELE_LIGHT, !isDark);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String startFile(String filename, String mimeType) {
+            // Before Android 10, writing to Downloads needs the storage permission
+            if (Build.VERSION.SDK_INT < 29 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Allow storage, then save the file again",
+                        Toast.LENGTH_LONG).show();
+                    requestPermissions(new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSION_REQUEST);
+                });
+                return "";
+            }
+            String id = fileSaver.start(filename, mimeType);
+            if (id.isEmpty()) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Couldn't save the file",
+                    Toast.LENGTH_SHORT).show());
+            }
+            return id;
+        }
+
+        @JavascriptInterface
+        public boolean appendFile(String id, String base64) {
+            return fileSaver.append(id, base64);
+        }
+
+        @JavascriptInterface
+        public void finishFile(String id) {
+            String name = fileSaver.finish(id);
+            runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                name == null ? "Couldn't save the file" : "Saved to Downloads: " + name, Toast.LENGTH_SHORT).show());
         }
     }
 }

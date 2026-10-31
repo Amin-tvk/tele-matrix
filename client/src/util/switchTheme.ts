@@ -3,6 +3,7 @@ import type { ThemeKey } from '../types';
 import { buildColor, mixColors, serializeColor } from '../lib/color';
 import { requestMutation } from '../lib/fasterdom/fasterdom';
 import themeColors from '../styles/themes.json';
+import { setAndroidDarkTheme } from './androidBridge';
 import { animate } from './animation';
 import { convertSrgbChannel } from './colors.ts';
 
@@ -61,6 +62,7 @@ const switchTheme = (theme: ThemeKey, withAnimation: boolean) => {
     if (themeColorTag) {
       themeColorTag.setAttribute('content', isDarkTheme ? '#212121' : '#fff');
     }
+    setAndroidDarkTheme(isDarkTheme);
 
     setTimeout(() => {
       requestMutation(() => {

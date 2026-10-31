@@ -1,4 +1,5 @@
 /* eslint-disable simple-import-sort/imports -- Sanitize and claim URL login before other startup modules */
+import './util/polyfills';
 import { getPendingWebLogin } from './util/routing';
 import { webLoginHandoffPromise } from './util/webLoginHandoff';
 import './util/handleError';

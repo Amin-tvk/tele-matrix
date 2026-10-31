@@ -1,3 +1,4 @@
+import { canSaveFilesOnAndroid, saveFileOnAndroid } from './androidBridge';
 import { pause } from './schedulers';
 
 type PendingDownload = {
@@ -37,6 +38,12 @@ async function processQueue() {
 }
 
 function downloadOne({ url, filename }: PendingDownload) {
+  if (canSaveFilesOnAndroid()) {
+    // eslint-disable-next-line no-console
+    saveFileOnAndroid(url, filename).catch((err) => console.error(err));
+    return;
+  }
+
   const link = document.createElement('a');
   link.href = url;
   link.target = '_blank';

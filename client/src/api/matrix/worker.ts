@@ -1,5 +1,7 @@
 /* eslint-disable no-console */
 
+import '../../util/polyfills';
+
 import type { DebugLevel } from '../../util/debugConsole';
 import type { OriginMessageEvent, WorkerPayload } from '../gramjs/worker/types';
 import type { ApiOnProgress, ApiUpdate } from '../types';

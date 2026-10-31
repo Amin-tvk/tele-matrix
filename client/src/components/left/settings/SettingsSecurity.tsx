@@ -4,6 +4,7 @@ import { getActions, withGlobal } from '../../../global';
 import { SettingsScreens } from '../../../types';
 
 import { selectCanSetPasscode } from '../../../global/selectors';
+import { getAndroidBridge } from '../../../util/androidBridge';
 import { callApi } from '../../../api/gramjs';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -30,16 +31,6 @@ type EncryptionStatus = Awaited<ReturnType<typeof callApi<'fetchEncryptionStatus
 
 const MINUTE_MS = 60 * 1000;
 const CALCULATOR_LOCK_EVENT = 'peyvandcalculatorlock';
-
-// Set by the Android app (the calculator APK), which runs Tele inside itself
-type AndroidBridge = {
-  isCalculatorLockOn: () => boolean;
-  openCalculatorLock: () => void;
-};
-
-function getAndroidBridge() {
-  return (window as Window & { PeyvandAndroid?: AndroidBridge }).PeyvandAndroid;
-}
 
 function formatAutolock(duration?: number) {
   if (!duration) return 'Never locks by itself';
