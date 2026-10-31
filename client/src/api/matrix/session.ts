@@ -1,6 +1,6 @@
 import type { ApiSessionData } from '../types';
 
-import { MATRIX_HOMESERVER_URL } from './constants';
+import { MATRIX_CLIENT_API_URL, MATRIX_HOMESERVER_URL } from './constants';
 
 export type MatrixSession = {
   homeserver: string;
@@ -45,6 +45,11 @@ export function getAuthHeaders(): Record<string, string> {
   return currentSession ? { Authorization: `Bearer ${currentSession.accessToken}` } : {};
 }
 
+// The address requests go to; the stored homeserver stays the account's identity
+export function getApiBaseUrl(homeserver: string) {
+  return homeserver.replace(/\/$/, '') === MATRIX_HOMESERVER_URL ? MATRIX_CLIENT_API_URL : homeserver;
+}
+
 export function getHomeserverUrl() {
-  return currentSession?.homeserver || MATRIX_HOMESERVER_URL;
+  return getApiBaseUrl(currentSession?.homeserver || MATRIX_HOMESERVER_URL);
 }

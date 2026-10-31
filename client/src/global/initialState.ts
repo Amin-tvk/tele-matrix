@@ -4,6 +4,7 @@ import { LeftColumnContent, NewChatMembersProgress, SettingsScreens } from '../t
 
 import {
   ANIMATION_LEVEL_DEFAULT,
+  ANIMATION_LEVEL_MED,
   DEFAULT_GIFT_PROFILE_FILTER_OPTIONS,
   DEFAULT_MESSAGE_TEXT_SIZE_PX,
   DEFAULT_PLAYBACK_RATE,
@@ -14,7 +15,7 @@ import {
   IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX,
   MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX,
 } from '../config';
-import { IS_IOS, IS_MAC_OS } from '../util/browser/windowEnvironment';
+import { IS_ANDROID_APP, IS_IOS, IS_MAC_OS } from '../util/browser/windowEnvironment';
 import { getDefaultPatternColor } from '../util/wallpaper';
 import { DEFAULT_APP_CONFIG } from '../limits';
 import { INITIAL_BROWSER_STATE } from './helpers/browser';
@@ -97,11 +98,12 @@ export const INITIAL_SHARED_STATE: SharedState = {
       ? IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX
       : (IS_MAC_OS ? MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX : DEFAULT_MESSAGE_TEXT_SIZE_PX),
     instantViewFontSizeAdjust: INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT,
-    animationLevel: ANIMATION_LEVEL_DEFAULT,
+    // Phones running the Android app get lighter animations by default
+    animationLevel: IS_ANDROID_APP ? ANIMATION_LEVEL_MED : ANIMATION_LEVEL_DEFAULT,
     foldersPosition: FOLDERS_POSITION_DEFAULT,
     messageSendKeyCombo: 'enter',
     shouldReplaceTextShortcuts: true,
-    performance: INITIAL_PERFORMANCE_STATE_MAX,
+    performance: IS_ANDROID_APP ? INITIAL_PERFORMANCE_STATE_MED : INITIAL_PERFORMANCE_STATE_MAX,
     shouldSkipBrowserCloseConfirmation: false,
     language: 'en',
     timeFormat: '24h',

@@ -46,7 +46,8 @@ export default function useConnectionStatus(
 
   let text: string | undefined;
   if (status === ConnectionStatus.waitingForNetwork) {
-    text = lang('WaitingForNetwork');
+    // "Waiting for network" only when the device itself is offline; otherwise the server is being reached
+    text = lang(isBrowserOnline ? 'Connecting' : 'WaitingForNetwork');
   } else if (status === ConnectionStatus.syncing) {
     text = lang('Updating');
   }

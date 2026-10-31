@@ -60,6 +60,11 @@ self.addEventListener('fetch', (e: FetchEvent) => {
   const { pathname, protocol } = new URL(url);
   const { pathname: scopePathname } = new URL(scope);
 
+  // The Matrix API shares this address (its media paths contain "/download/"); it always goes to the network
+  if (pathname.startsWith('/_matrix/') || pathname.startsWith('/_synapse/')) {
+    return false;
+  }
+
   if (pathname.includes('/progressive/')) {
     e.respondWith(respondForProgressive(e));
     return true;

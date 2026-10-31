@@ -2,8 +2,8 @@ import type { RegularLangFnParameters } from '../../util/localization/types';
 import type { MatrixSession } from './session';
 
 import { onUpdate, startClient } from './client';
+import { DEVICE_DISPLAY_NAME, MATRIX_CLIENT_API_URL, MATRIX_HOMESERVER_URL } from './constants';
 import { startAutomaticBackup } from './encryption';
-import { DEVICE_DISPLAY_NAME, MATRIX_HOMESERVER_URL } from './constants';
 
 type MatrixErrorResponse = {
   errcode?: string;
@@ -21,7 +21,7 @@ function sendAuthError(errorKey: RegularLangFnParameters) {
 }
 
 async function postJson(path: string, body: unknown) {
-  const response = await fetch(`${MATRIX_HOMESERVER_URL}${path}`, {
+  const response = await fetch(`${MATRIX_CLIENT_API_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -127,7 +127,8 @@ export async function provideMatrixRegistration({
 
     const session = buildSession(data);
     if (displayName?.trim()) {
-      await fetch(`${MATRIX_HOMESERVER_URL}/_matrix/client/v3/profile/${encodeURIComponent(session.userId)}/displayname`, {
+      const profileUrl = `${MATRIX_CLIENT_API_URL}/_matrix/client/v3/profile/${encodeURIComponent(session.userId)}`;
+      await fetch(`${profileUrl}/displayname`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
         body: JSON.stringify({ displayname: displayName.trim() }),

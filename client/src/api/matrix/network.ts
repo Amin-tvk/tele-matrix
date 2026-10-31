@@ -1,3 +1,5 @@
+import { getValue, setValue } from './store';
+
 // Network resilience for the Matrix connection. Proxies and mobile networks often drop idle
 // long-poll connections without closing them, which the SDK would only notice after its
 // 80-second buffer. Requests are given tight deadlines instead, so a dead connection fails fast
@@ -38,6 +40,42 @@ function watchKeyUpload(response: Response) {
   return response;
 }
 
+// The long poll in flight: after the app was in the background or the network changed it may be dead
+// without having failed yet
+let pendingSync: { startedAt: number; timeout: number; abort: NoneToVoidFunction } | undefined;
+// Grace before an unanswered long poll counts as dead when the app asks (it is cut at LONG_POLL_GRACE_MS anyway)
+const OVERDUE_SYNC_GRACE_MS = 2000;
+
+// Fails a long poll that should have been answered by now, so the SDK reconnects right away
+export function abortOverdueSync() {
+  if (!pendingSync) return false;
+  if (Date.now() - pendingSync.startedAt <= pendingSync.timeout + OVERDUE_SYNC_GRACE_MS) return false;
+  pendingSync.abort();
+  return true;
+}
+
+// The SDK asks for the server's versions before it shows the chats saved on the device, which costs a round trip
+// (seconds on a slow mobile network) on every start. The first ask is answered from the last answer saved here;
+// the server is still asked, to refresh it. Later asks (the SDK's connection checks) always go to the server
+const VERSIONS_CACHE_KEY = 'cache:versions';
+let isVersionsCacheUsed = false;
+
+function rememberVersions(response: Response) {
+  if (response.ok) {
+    response.clone().text().then((text) => setValue(VERSIONS_CACHE_KEY, text)).catch(() => undefined);
+  }
+  return response;
+}
+
+function answerVersionsFromCache(input: RequestInfo | URL, init?: RequestInit) {
+  if (isVersionsCacheUsed) return undefined;
+  isVersionsCacheUsed = true;
+  const cached = getValue(VERSIONS_CACHE_KEY);
+  if (!cached) return undefined;
+  void fetch(input, init).then(rememberVersions).catch(() => undefined);
+  return Promise.resolve(new Response(cached, { status: 200, headers: { 'Content-Type': 'application/json' } }));
+}
+
 export const fetchWithDeadline: typeof fetch = (input, init) => {
   let deadline: number | undefined;
   let url: URL | undefined;
@@ -46,6 +84,12 @@ export const fetchWithDeadline: typeof fetch = (input, init) => {
     deadline = getRequestDeadline(url);
   } catch {
     deadline = undefined;
+  }
+
+  const isVersionsRequest = Boolean(url?.pathname.endsWith('/_matrix/client/versions'));
+  if (isVersionsRequest) {
+    const cachedAnswer = answerVersionsFromCache(input, init);
+    if (cachedAnswer) return cachedAnswer;
   }
 
   if (url?.pathname.endsWith('/keys/upload')) return fetch(input, init).then(watchKeyUpload);
@@ -61,12 +105,19 @@ export const fetchWithDeadline: typeof fetch = (input, init) => {
   }
 
   let isTimedOut = false;
-  const timer = setTimeout(() => {
+  const timeOut = () => {
     isTimedOut = true;
     controller.abort();
-  }, deadline);
+  };
+  const timer = setTimeout(timeOut, deadline);
+  const isSync = url!.pathname.endsWith('/sync');
+  const syncEntry = isSync
+    ? { startedAt: Date.now(), timeout: Number(url!.searchParams.get('timeout')) || 0, abort: timeOut }
+    : undefined;
+  if (syncEntry) pendingSync = syncEntry;
 
   return fetch(input, { ...init, signal: controller.signal })
+    .then((response) => (isVersionsRequest ? rememberVersions(response) : response))
     .catch((err) => {
       // Reported as a network failure so the SDK retries instead of treating it as a cancellation
       if (isTimedOut) throw new TypeError('Request timed out');
@@ -74,6 +125,7 @@ export const fetchWithDeadline: typeof fetch = (input, init) => {
     })
     .finally(() => {
       clearTimeout(timer);
+      if (syncEntry && pendingSync === syncEntry) pendingSync = undefined;
       outerSignal?.removeEventListener('abort', forwardAbort);
     });
 };

@@ -3,7 +3,9 @@ import { getActions, getGlobal } from '../global';
 import { DEBUG, DEBUG_MORE, IS_TEST } from '../config';
 // eslint-disable-next-line import-x/default
 import serviceWorkerUrl from '../serviceWorker/service.worker.ts?worker&url';
-import { IS_ANDROID, IS_IOS, IS_SERVICE_WORKER_SUPPORTED } from './browser/windowEnvironment';
+import {
+  IS_ANDROID, IS_ANDROID_APP, IS_IOS, IS_SERVICE_WORKER_SUPPORTED,
+} from './browser/windowEnvironment';
 import { formatShareText } from './deeplink';
 import { validateFiles } from './files';
 import { notifyClientReady, playNotifySoundDebounced } from './notifications';
@@ -60,7 +62,12 @@ function subscribeToWorker() {
   notifyClientReady();
 }
 
-if (IS_SERVICE_WORKER_SUPPORTED) {
+if (IS_SERVICE_WORKER_SUPPORTED && IS_ANDROID_APP) {
+  // The Android app carries these files itself; a worker only adds cache lookups and network races to startup
+  void navigator.serviceWorker.getRegistrations()
+    .then((registrations) => Promise.all(registrations.map((r) => r.unregister())))
+    .catch(() => undefined);
+} else if (IS_SERVICE_WORKER_SUPPORTED) {
   window.addEventListener('load', async () => {
     try {
       const controller = navigator.serviceWorker.controller;

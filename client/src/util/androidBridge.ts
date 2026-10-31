@@ -3,8 +3,6 @@
 export type AndroidBridge = {
   isCalculatorLockOn: () => boolean;
   openCalculatorLock: () => void;
-  setMatrixSession?: (sessionJson: string) => void;
-  clearMatrixSession?: () => void;
   setDarkTheme?: (isDark: boolean) => void;
   startFile?: (filename: string, mimeType: string) => string;
   appendFile?: (id: string, base64: string) => boolean;
@@ -16,14 +14,6 @@ const FILE_CHUNK_SIZE = 768 * 1024;
 
 export function getAndroidBridge() {
   return (window as Window & { PeyvandAndroid?: AndroidBridge }).PeyvandAndroid;
-}
-
-// The app checks for new messages itself while Tele is closed, using the same login
-export function shareSessionWithAndroid(sessionKey?: string) {
-  const bridge = getAndroidBridge();
-  if (!bridge?.setMatrixSession) return;
-  if (sessionKey) bridge.setMatrixSession(sessionKey);
-  else bridge.clearMatrixSession?.();
 }
 
 export function setAndroidDarkTheme(isDark: boolean) {

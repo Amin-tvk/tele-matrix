@@ -796,6 +796,14 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         },
       };
 
+      // Sending focuses the local copy; when the server answers before that scroll ran, the focus would point at
+      // a message that no longer exists and the list stays where it was. It follows the message to its real ID
+      Object.values(global.byTabId).forEach(({ id: tabId, focusedMessage }) => {
+        if (focusedMessage?.chatId === chatId && focusedMessage.messageId === localId) {
+          global = updateTabState(global, { focusedMessage: { ...focusedMessage, messageId: message.id } }, tabId);
+        }
+      });
+
       const newMessage = selectChatMessage(global, chatId, message.id)!;
       global = updateChatLastMessage(global, chatId, newMessage);
 

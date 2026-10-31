@@ -60,10 +60,10 @@ import {
   isUserPeerId,
 } from './ids';
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
-import { fetchWithDeadline, setKeyUploadConflictHandler } from './network';
+import { abortOverdueSync, fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { handleReactionUsageAccountData } from './reactionUsage';
 import { getRoomTtlSeconds, isExpiredEvent } from './retention';
-import { buildSessionData, setSession } from './session';
+import { buildSessionData, getApiBaseUrl, setSession } from './session';
 import {
   clearStore, flushStore, getValue, loadStore, setStoreName, setValue,
 } from './store';
@@ -142,7 +142,7 @@ export async function startClient(session: MatrixSession, isFreshLogin?: boolean
 
   setKeyUploadConflictHandler(handleKeyUploadConflict);
   client = createClient({
-    baseUrl: session.homeserver,
+    baseUrl: getApiBaseUrl(session.homeserver),
     accessToken: session.accessToken,
     userId: session.userId,
     deviceId: session.deviceId,
@@ -171,7 +171,8 @@ export async function startClient(session: MatrixSession, isFreshLogin?: boolean
   watchDeviceVerificationRequests(client);
 
   onUpdate({ '@type': 'updateApiReady' });
-  onUpdate({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
+  // Shown only if the first sync takes long; a quick start goes straight to the chats
+  scheduleConnectingState();
   void sendCurrentUser();
 
   await client.startClient({
@@ -928,8 +929,8 @@ function subscribeToClient(matrixClient: MatrixClient) {
   matrixClient.on(HttpApiEvent.SessionLoggedOut, handleLoggedOut);
 }
 
-// Short hiccups recover within a couple of seconds; the "waiting for network" state is only shown after that
-const CONNECTING_STATE_DELAY_MS = 2500;
+// Short hiccups recover within a few seconds; the connecting state is only shown after that
+const CONNECTING_STATE_DELAY_MS = 5000;
 let connectingStateTimeout: ReturnType<typeof setTimeout> | undefined;
 let isConnectingStateShown = false;
 
@@ -967,12 +968,14 @@ function clearConnectingState() {
 }
 
 // Reconnects right away when the device regains connectivity instead of waiting for the next retry
+// Also called when the app comes back on screen: a long poll left over from before may be dead
 export function retryConnectionNow() {
   const syncState = client?.getSyncState();
   if (syncState === SyncState.Error || syncState === SyncState.Reconnecting) {
     client!.retryImmediately();
   } else {
     stopReconnectProbes();
+    abortOverdueSync();
   }
 }
 
@@ -1000,6 +1003,8 @@ function handleSync(state: SyncState, prevState: SyncState | null) {
   }
 
   if (state === SyncState.Error || state === SyncState.Reconnecting) {
+    // The SDK would first wait 2-7 seconds; a dropped long poll usually works again at once
+    if (prevState !== SyncState.Error && prevState !== SyncState.Reconnecting) client?.retryImmediately();
     scheduleConnectingState();
     return;
   }

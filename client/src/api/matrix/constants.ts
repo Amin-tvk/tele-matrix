@@ -1,6 +1,11 @@
 export const MATRIX_HOMESERVER_URL = (import.meta.env.TG_APP_MATRIX_HOMESERVER || 'https://mtx.peyvand-yar.ir')
   .replace(/\/$/, '');
 
+// Where the client API is reached. When the site proxies /_matrix on its own address, requests stay same-origin
+// and skip the CORS preflight a cross-site call needs, saving a round trip each
+export const MATRIX_CLIENT_API_URL = (import.meta.env.TG_APP_MATRIX_CLIENT_API || MATRIX_HOMESERVER_URL)
+  .replace(/\/$/, '');
+
 // Custom content key used to keep "Forwarded from" information when copying an event to another room
 export const FORWARD_KEY = 'im.peyvand.forward';
 

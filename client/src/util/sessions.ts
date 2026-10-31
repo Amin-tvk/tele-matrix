@@ -15,7 +15,6 @@ import {
   removeSessionValue,
   writeSessionValue,
 } from './passcode/sessionStore';
-import { shareSessionWithAndroid } from './androidBridge';
 import {
   ACCOUNT_SLOT, getAccountSlots, loadSlotSession, storeAccountData, updateSessionStorage,
 } from './multiaccount';
@@ -62,7 +61,6 @@ export function storeSession(sessionData: ApiSessionData) {
 
     if (!ACCOUNT_SLOT) {
       storeLegacySession(sessionData, currentSlotData?.userId);
-      shareSessionWithAndroid(keys[mainDcId]);
     }
 
     writeSessionValue(`${SESSION_ACCOUNT_PREFIX}${ACCOUNT_SLOT || 1}`, JSON.stringify(newSlotData));
@@ -89,7 +87,6 @@ export function clearStoredSession(slot?: number) {
   return updateSessionStorage(() => {
     if (!slot) {
       clearStoredLegacySession();
-      shareSessionWithAndroid(undefined);
     }
 
     removeSessionValue(`${SESSION_ACCOUNT_PREFIX}${slot || 1}`);
@@ -144,8 +141,6 @@ export function loadStoredSession(): ApiSessionData | undefined {
     }, {} as Record<number, string>),
     isTest: slotData.isTest || undefined,
   };
-
-  if (!ACCOUNT_SLOT) shareSessionWithAndroid(sessionData.keys[sessionData.mainDcId]);
 
   return sessionData;
 }

@@ -181,6 +181,7 @@ export default defineConfig(({ mode }): UserConfig => {
     TG_TELEGRAM_API_HASH: telegramApiHash,
     TG_TEST_SESSION: env.TEST_SESSION || '',
     TG_APP_MATRIX_HOMESERVER: env.MATRIX_HOMESERVER || 'https://mtx.peyvand-yar.ir',
+    TG_APP_MATRIX_CLIENT_API: env.MATRIX_CLIENT_API || '',
     TG_APP_VAPID_PUBLIC_KEY: env.VAPID_PUBLIC_KEY || '',
     TG_APP_PUSH_APP_ID: env.PUSH_APP_ID || 'ir.peyvand-yar.tele.web',
   });

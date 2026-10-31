@@ -15,11 +15,19 @@ export default function useContainerHeight(containerRef: ElementRef<HTMLDivEleme
   useResizeObserver(containerRef, handleResize);
 
   useEffect(() => {
-    const currentNormalHeight = Number(containerRef.current!.dataset.normalHeight) || 0;
+    const { dataset } = containerRef.current!;
+    const currentNormalHeight = Number(dataset.normalHeight) || 0;
     const containerHeight = getContainerHeight();
+    if (!containerHeight || !isComposerVisible) return;
 
-    if (containerHeight && containerHeight > currentNormalHeight && isComposerVisible) {
-      containerRef.current!.dataset.normalHeight = String(containerHeight);
+    // The normal height is the list without a grown composer. A phone keyboard shrinks the whole window instead;
+    // keeping the taller height then would stop every scroll to a sent message a keyboard's height short
+    const windowHeight = String(window.innerHeight);
+    if (dataset.normalHeightWindow !== windowHeight) {
+      dataset.normalHeightWindow = windowHeight;
+      dataset.normalHeight = String(containerHeight);
+    } else if (containerHeight > currentNormalHeight) {
+      dataset.normalHeight = String(containerHeight);
     }
   }, [isComposerVisible, containerRef, getContainerHeight]);
 
