@@ -368,7 +368,8 @@ public class MainActivity extends Activity {
             .setMessage("A new version of the app is ready. Download it and open the file to install it; "
                 + "you stay signed in.")
             .setPositiveButton("Download", (dialog, which) -> {
-                Uri apk = Uri.parse(BuildConfig.APP_URL).buildUpon().path("calculator.apk")
+                // Always the latest build; the site serves it uncached (see android/README.md)
+                Uri apk = Uri.parse(BuildConfig.APP_URL).buildUpon().path("download")
                     .appendQueryParameter("v", String.valueOf(version)).build();
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, apk));
