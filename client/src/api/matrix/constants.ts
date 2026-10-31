@@ -6,7 +6,21 @@ export const FORWARD_KEY = 'im.peyvand.forward';
 
 export const THUMBNAIL_SEPARATOR = '~';
 
-export const UNDECRYPTABLE_TEXT = '🔒 This message is encrypted and cannot be read on this device';
+export const UNDECRYPTABLE_TEXT = '🔒 Waiting for this message';
+
+// Second line under an unreadable message: what the reader can do about it, by why the key is missing
+export const UNDECRYPTABLE_HINTS: Record<string, string> = {
+  HISTORICAL_MESSAGE_USER_NOT_JOINED: 'It was sent before you joined, so it cannot be read.',
+  HISTORICAL_MESSAGE_NO_KEY_BACKUP: 'Turn on message key backup on a device you used before, '
+    + 'then it will appear here.',
+  HISTORICAL_MESSAGE_BACKUP_UNCONFIGURED: 'Open Settings › Privacy and Security › Message key backup '
+    + 'to read older messages on this device.',
+  MEGOLM_KEY_WITHHELD_FOR_UNVERIFIED_DEVICE: 'The sender only shares keys with verified devices. '
+    + 'Verify this device in Settings › Privacy and Security.',
+  MEGOLM_KEY_WITHHELD: 'The sender did not share the key with this device.',
+};
+export const UNDECRYPTABLE_DEFAULT_HINT = 'If you use Tele on another device, open it there '
+  + 'and this message will appear here within a minute.';
 
 export const DEVICE_DISPLAY_NAME = 'Peyvand Web';
 

@@ -36,7 +36,8 @@ import {
   COMMENT_EVENT, getCommentRootEventId, getCommentsChatId, isCommentEvent, rememberCommentEvent,
 } from './comments';
 import {
-  FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR, UNDECRYPTABLE_TEXT,
+  FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR,
+  UNDECRYPTABLE_DEFAULT_HINT, UNDECRYPTABLE_HINTS, UNDECRYPTABLE_TEXT,
 } from './constants';
 import { parseHtmlToFormattedText, stripReplyFallback } from './html';
 import {
@@ -402,6 +403,21 @@ function buildStoryReplyInfo(event: MatrixEvent) {
   return ref ? { type: 'story' as const, ...ref } : undefined;
 }
 
+// The SDK picks its reason for an unreadable message once, when it first fails: on a new device that is before
+// the key backup is switched on, so those reasons stop being true as soon as it is
+const NO_BACKUP_REASONS = new Set(['HISTORICAL_MESSAGE_NO_KEY_BACKUP', 'HISTORICAL_MESSAGE_BACKUP_UNCONFIGURED']);
+let isKeyBackupActive = false;
+
+export function setKeyBackupActive(isActive: boolean) {
+  isKeyBackupActive = isActive;
+}
+
+function getUndecryptableHint(event: MatrixEvent) {
+  const reason = event.decryptionFailureReason;
+  if (!reason || (isKeyBackupActive && NO_BACKUP_REASONS.has(reason))) return UNDECRYPTABLE_DEFAULT_HINT;
+  return UNDECRYPTABLE_HINTS[reason] || UNDECRYPTABLE_DEFAULT_HINT;
+}
+
 function buildMessageContent(
   event: MatrixEvent, context: ChatContext,
 ): MediaContent | undefined {
@@ -411,10 +427,11 @@ function buildMessageContent(
   const { resolvePeerId } = context;
 
   if (event.isDecryptionFailure() || type === EventType.RoomMessageEncrypted) {
+    const text = `${UNDECRYPTABLE_TEXT}\n${getUndecryptableHint(event)}`;
     return {
       text: {
-        text: UNDECRYPTABLE_TEXT,
-        entities: [{ type: ApiMessageEntityTypes.Italic, offset: 0, length: UNDECRYPTABLE_TEXT.length }],
+        text,
+        entities: [{ type: ApiMessageEntityTypes.Italic, offset: 0, length: text.length }],
       },
     };
   }

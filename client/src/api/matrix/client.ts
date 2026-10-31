@@ -17,6 +17,7 @@ import {
   SyncState,
   UserEvent,
 } from 'matrix-js-sdk';
+import { CryptoEvent } from 'matrix-js-sdk/lib/crypto-api';
 
 import type {
   ApiChat, ApiMessage, ApiUpdate, ApiUser, ApiUserStatus,
@@ -40,6 +41,7 @@ import {
   getReplyTargetEventId,
   isDisplayableEvent,
   isRoomChannel,
+  setKeyBackupActive,
 } from './builders';
 import {
   addCommentToSummary, areCommentsEnabled, getCommentRootEventId, getCommentsChatId, getKnownCommentRootId,
@@ -328,15 +330,32 @@ async function recheckKeyBackup() {
   }
 }
 
+// Unreadable messages tell the user to turn the backup on while it is off; once it is on they are rebuilt with
+// the hint that applies then
+function handleKeyBackupStatus(isActive: boolean) {
+  setKeyBackupActive(isActive);
+  if (!isActive || !client || !undecryptableEventIds.size) return;
+  client.getRooms().forEach((room) => {
+    undecryptableEventIds.forEach((eventId) => {
+      const event = room.findEventById(eventId);
+      if (event) sendMessageUpdate(room, event);
+    });
+  });
+}
+
 function startBackupRecheck() {
   stopBackupRecheck();
   backupRecheckInterval = setInterval(recheckKeyBackup, BACKUP_RECHECK_INTERVAL_MS);
+  client?.on(CryptoEvent.KeyBackupStatus, handleKeyBackupStatus);
+  void client?.getCrypto()?.getActiveSessionBackupVersion().then((version) => handleKeyBackupStatus(Boolean(version)));
 }
 
 function stopBackupRecheck() {
   if (backupRecheckInterval) clearInterval(backupRecheckInterval);
   backupRecheckInterval = undefined;
   lastBackupEtag = undefined;
+  client?.off(CryptoEvent.KeyBackupStatus, handleKeyBackupStatus);
+  setKeyBackupActive(false);
 }
 
 export async function stopClient(shouldClearData: boolean) {
