@@ -11,9 +11,11 @@ An Android app that opens Tele inside itself and can disguise itself as a calcul
 - If the user forgets the calculation, clearing the app's data resets it, which signs them out of Tele on that phone.
 - Tele keeps loading behind the calculator, so it appears at once.
 - Tele's web build ships inside the APK and is served to the WebView from there. The app starts without the website; only the Matrix server is needed. The large emoji images still load from the website when needed.
-- Notifications: a background service checks the account's notification list (`/notifications`) every minute and shows new messages, with the sender's name and the text (encrypted messages show "New message"). It doesn't use `/sync`, so it never takes the device's encryption key messages away from Tele. While the calculator lock is on, notifications only say "You have new notifications".
+- No notifications (removed in version 3 by request). The app keeps nothing of the login outside Tele itself.
+- No service worker inside the app: the files are already on the phone, and the worker only added cache lookups and 3-second network races to every start.
 - Downloads from Tele are saved to the phone's Downloads folder.
-- The app checks `android-version.txt` on the website twice a day and offers the new APK when there is one.
+- The app checks `android-version.txt` on the website twice a day and offers the new APK when there is one. Both are fetched with a changing query (`?t=…`, `?v=<version>`): the ArvanCloud CDN caches `calculator.apk` whatever its headers say. Share the download as `https://tele.peyvand-yar.ir/calculator.apk?v=<version>`.
+- Turning the calculator lock on, or changing the calculation, always shows the warning first (forgetting it means clearing the app's data).
 
 ## Build
 
@@ -34,5 +36,4 @@ To publish an update on the live site, copy `calculator.apk` and `android-versio
 
 ## Limits
 
-- Notifications can be up to a minute late. In deep sleep, Android may delay them further.
 - The Tele inside the app only changes with a new APK. `build-apk.sh` takes the web build from `WEB_DIR` (default `/opt/tele/www`), so build the web client first.

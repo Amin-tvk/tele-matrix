@@ -5,6 +5,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -16,6 +17,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.MimeTypeMap;
 import android.webkit.PermissionRequest;
 import android.webkit.ServiceWorkerClient;
 import android.webkit.ServiceWorkerController;
@@ -44,7 +46,6 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int PERMISSION_REQUEST = 2;
     private static final int LOCK_SETUP_REQUEST = 3;
-    private static final int NOTIFICATION_PERMISSION_REQUEST = 4;
     private static final int TELE_DARK = 0xFF212121;
     private static final int TELE_LIGHT = 0xFFFFFFFF;
     private static final long UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L;
@@ -84,13 +85,12 @@ public class MainActivity extends Activity {
         createWebView();
         if (LockStore.isOn(this)) showCalculator();
         else showTele();
-        NotifyService.start(this);
+        forgetNotificationData();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        NotifyService.isTeleVisible = false;
         if (!isInOwnScreen && LockStore.isOn(this)) showCalculator();
     }
 
@@ -112,7 +112,6 @@ public class MainActivity extends Activity {
     }
 
     private void showCalculator() {
-        NotifyService.isTeleVisible = false;
         calculator.clear();
         calculator.setVisibility(View.VISIBLE);
         webView.setVisibility(View.INVISIBLE);
@@ -129,8 +128,6 @@ public class MainActivity extends Activity {
     }
 
     private void onTeleShown() {
-        NotifyService.isTeleVisible = true;
-        NotifyService.clearMessages(this);
         setBarColors(isTeleDark ? TELE_DARK : TELE_LIGHT, !isTeleDark);
         checkForUpdate();
     }
@@ -181,6 +178,9 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportMultipleWindows(false);
+        // Smoother scrolling: parts just off screen are drawn ahead, and the page renders with high priority
+        settings.setOffscreenPreRaster(true);
+        if (Build.VERSION.SDK_INT >= 26) webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true);
         settings.setUserAgentString(settings.getUserAgentString() + " PeyvandAndroid/" + BuildConfig.VERSION_NAME);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         webView.addJavascriptInterface(new Bridge(), "PeyvandAndroid");
@@ -209,9 +209,7 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
-                Intent intent = params.createIntent();
-                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
-                    params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
+                Intent intent = buildFileIntent(params);
                 try {
                     isInOwnScreen = true;
                     startActivityForResult(intent, FILE_CHOOSER_REQUEST);
@@ -231,6 +229,52 @@ public class MainActivity extends Activity {
         root.addView(webView, 0, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         webView.loadUrl(BuildConfig.APP_URL);
+    }
+
+    // Tele asks for several types at once ("image/*,video/*"), which the WebView's own intent can't express
+    private static Intent buildFileIntent(WebChromeClient.FileChooserParams params) {
+        List<String> types = new ArrayList<>();
+        for (String accept : params.getAcceptTypes()) {
+            for (String type : accept.split(",")) {
+                String trimmed = type.trim();
+                if (trimmed.isEmpty()) continue;
+                if (trimmed.startsWith(".")) {
+                    String fromExtension = MimeTypeMap.getSingleton().getMimeTypeFromExtension(trimmed.substring(1));
+                    if (fromExtension == null) {
+                        types.clear();
+                        types.add("*/*");
+                        break;
+                    }
+                    trimmed = fromExtension;
+                }
+                types.add(trimmed);
+            }
+        }
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        if (types.isEmpty() || types.contains("*/*")) {
+            intent.setType("*/*");
+        } else if (types.size() == 1) {
+            intent.setType(types.get(0));
+        } else {
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, types.toArray(new String[0]));
+        }
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
+            params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE);
+        return intent;
+    }
+
+    // Several picked files come back as a list rather than a single address
+    private static Uri[] readPickedFiles(int resultCode, Intent data) {
+        if (resultCode != RESULT_OK || data == null) return null;
+        ClipData clip = data.getClipData();
+        if (clip != null && clip.getItemCount() > 0) {
+            Uri[] uris = new Uri[clip.getItemCount()];
+            for (int i = 0; i < uris.length; i++) uris[i] = clip.getItemAt(i).getUri();
+            return uris;
+        }
+        return data.getData() == null ? null : new Uri[] {data.getData()};
     }
 
     // Voice messages and calls need the microphone (and camera); Android asks the user first
@@ -253,18 +297,8 @@ public class MainActivity extends Activity {
         requestPermissions(missing.toArray(new String[0]), PERMISSION_REQUEST);
     }
 
-    private void askForNotifications() {
-        if (Build.VERSION.SDK_INT < 33) return;
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return;
-        requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST);
-    }
-
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
-            NotifyService.start(this);
-            return;
-        }
         if (requestCode != PERMISSION_REQUEST || pendingPermission == null) return;
         boolean isGranted = results.length > 0;
         for (int result : results) isGranted &= result == PackageManager.PERMISSION_GRANTED;
@@ -277,11 +311,25 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FILE_CHOOSER_REQUEST && fileCallback != null) {
-            fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            fileCallback.onReceiveValue(readPickedFiles(resultCode, data));
             fileCallback = null;
         } else if (requestCode == LOCK_SETUP_REQUEST) {
             applyPrivacy();
             webView.evaluateJavascript("window.dispatchEvent(new Event('peyvandcalculatorlock'))", null);
+        }
+    }
+
+    // Version 2 checked for messages in the background with a copy of the login; nothing of that is kept now
+    private void forgetNotificationData() {
+        getSharedPreferences("session", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("notify", MODE_PRIVATE).edit().clear().apply();
+        android.app.NotificationManager manager = getSystemService(android.app.NotificationManager.class);
+        if (manager != null) {
+            manager.cancelAll();
+            if (Build.VERSION.SDK_INT >= 26) {
+                manager.deleteNotificationChannel("messages");
+                manager.deleteNotificationChannel("background");
+            }
         }
     }
 
@@ -293,7 +341,9 @@ public class MainActivity extends Activity {
         prefs.edit().putLong("updateCheckedAt", now).apply();
         new Thread(() -> {
             try {
-                URL url = new URL(Uri.parse(BuildConfig.APP_URL).buildUpon().path("android-version.txt").build().toString());
+                // The CDN in front of the site caches files regardless of their headers; a changing query skips it
+                URL url = new URL(Uri.parse(BuildConfig.APP_URL).buildUpon().path("android-version.txt")
+                    .appendQueryParameter("t", String.valueOf(now)).build().toString());
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setConnectTimeout(15000);
                 connection.setReadTimeout(15000);
@@ -304,21 +354,22 @@ public class MainActivity extends Activity {
                 } finally {
                     connection.disconnect();
                 }
-                if (latest > BuildConfig.VERSION_CODE) runOnUiThread(this::offerUpdate);
+                if (latest > BuildConfig.VERSION_CODE) runOnUiThread(() -> offerUpdate(latest));
             } catch (Exception ignored) {
                 // Try again next time
             }
         }).start();
     }
 
-    private void offerUpdate() {
+    private void offerUpdate(int version) {
         if (isFinishing() || webView.getVisibility() != View.VISIBLE) return;
         new AlertDialog.Builder(this)
             .setTitle("Update available")
             .setMessage("A new version of the app is ready. Download it and open the file to install it; "
                 + "you stay signed in.")
             .setPositiveButton("Download", (dialog, which) -> {
-                Uri apk = Uri.parse(BuildConfig.APP_URL).buildUpon().path("calculator.apk").build();
+                Uri apk = Uri.parse(BuildConfig.APP_URL).buildUpon().path("calculator.apk")
+                    .appendQueryParameter("v", String.valueOf(version)).build();
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, apk));
                 } catch (ActivityNotFoundException ignored) {
@@ -341,24 +392,6 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 isInOwnScreen = true;
                 startActivityForResult(new Intent(MainActivity.this, LockSetupActivity.class), LOCK_SETUP_REQUEST);
-            });
-        }
-
-        @JavascriptInterface
-        public void setMatrixSession(String sessionJson) {
-            if (!SessionStore.save(MainActivity.this, sessionJson)) return;
-            runOnUiThread(() -> {
-                NotifyService.start(MainActivity.this);
-                askForNotifications();
-            });
-        }
-
-        @JavascriptInterface
-        public void clearMatrixSession() {
-            SessionStore.clear(MainActivity.this);
-            runOnUiThread(() -> {
-                NotifyService.stop(MainActivity.this);
-                NotifyService.clearMessages(MainActivity.this);
             });
         }
 

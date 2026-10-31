@@ -26,16 +26,21 @@ public class LockSetupActivity extends Activity {
         else explain();
     }
 
+    // Shown every time the lock is turned on or the calculation changed: forgetting it costs the login
     private void explain() {
         new AlertDialog.Builder(this)
-            .setTitle("Calculator lock")
+            .setTitle("Read this before you continue")
             .setMessage("This app will open as a working calculator. Tele only appears when you type your own "
-                + "calculation and press =, for example 5×6=.\n\nWhen you leave the app, Tele hides behind the "
-                + "calculator again.\n\nIf you forget your calculation, the only way back in is to clear this "
-                + "app's data in Android settings, which signs you out of Tele on this phone.")
-            .setPositiveButton("Choose calculation", (dialog, which) -> startOver())
+                + "calculation and press =, for example 5×6=. When you leave the app, Tele hides behind the "
+                + "calculator again.\n\n"
+                + "IMPORTANT: remember your calculation. It is not saved anywhere and nobody can recover it, "
+                + "not even an admin.\n\n"
+                + "If you forget it, the only way back in is to clear this app's data in Android settings. That "
+                + "signs you out of Tele on this phone, and encrypted messages you can't restore from your key "
+                + "backup are lost on this phone.")
+            .setCancelable(false)
+            .setPositiveButton("I understand", (dialog, which) -> startOver())
             .setNegativeButton("Cancel", (dialog, which) -> finish())
-            .setOnCancelListener((dialog) -> finish())
             .show();
     }
 
@@ -44,7 +49,7 @@ public class LockSetupActivity extends Activity {
             .setTitle("Calculator lock is on")
             .setItems(new CharSequence[] {"Change the calculation", "Turn off calculator lock"}, (dialog, which) -> {
                 if (which == 0) {
-                    startOver();
+                    explain();
                 } else {
                     LockStore.turnOff(this);
                     setResult(RESULT_OK);
