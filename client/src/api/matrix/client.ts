@@ -593,10 +593,18 @@ export function getRoomByChatId(chatId: string) {
   return roomId ? client.getRoom(roomId) || undefined : undefined;
 }
 
+// Registry rooms hold server settings (blue ticks, emergency contacts, sticker packs); they are never chats
+const SYSTEM_ROOM_ALIAS_LOCALPARTS = new Set(['peyvand-verified', 'peyvand-emergency', 'peyvand-stickers']);
+
+function isSystemRoom(room: Room) {
+  const alias = room.getCanonicalAlias();
+  return Boolean(alias && SYSTEM_ROOM_ALIAS_LOCALPARTS.has(alias.slice(1, alias.indexOf(':'))));
+}
+
 export function isRoomVisible(room: Room) {
   const membership = room.getMyMembership();
   if (membership !== 'join' && membership !== 'invite') return false;
-  if (room.isSpaceRoom()) return false;
+  if (room.isSpaceRoom() || isSystemRoom(room)) return false;
   const tombstone = room.currentState.getStateEvents(EventType.RoomTombstone, '');
   if (tombstone) {
     const successor = client?.getRoom(tombstone.getContent().replacement_room);
