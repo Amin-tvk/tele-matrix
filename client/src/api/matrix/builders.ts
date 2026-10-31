@@ -24,6 +24,7 @@ import type {
   ApiVoice,
   MediaContent,
 } from '../types';
+import type { ApiPhoneCallDiscardReason } from '../types/calls';
 import type { ApiMessageAction } from '../types/messageActions';
 import type { PackImage } from './stickersState';
 import type { StoryRef } from './storiesState';
@@ -36,9 +37,10 @@ import {
   COMMENT_EVENT, getCommentRootEventId, getCommentsChatId, isCommentEvent, rememberCommentEvent,
 } from './comments';
 import {
-  FORWARD_KEY, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR,
+  FORWARD_KEY, GROUP_CALL_MEMBER_EVENT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT, ROUND_VIDEO_KEY, THUMBNAIL_SEPARATOR,
   UNDECRYPTABLE_DEFAULT_HINT, UNDECRYPTABLE_HINTS, UNDECRYPTABLE_TEXT,
 } from './constants';
+import { getGroupCallDuration } from './groupCalls';
 import { parseHtmlToFormattedText, stripReplyFallback } from './html';
 import {
   encodeMxc, findMessageId, getChatIdByRoomId, getMessageId, getPeerIdByUserId,
@@ -418,13 +420,89 @@ function getUndecryptableHint(event: MatrixEvent) {
   return UNDECRYPTABLE_HINTS[reason] || UNDECRYPTABLE_DEFAULT_HINT;
 }
 
+// A call shows in the chat as one entry, built from its invite: answered calls with their length, unanswered ones as
+// missed (or busy when declined). The answer and hang-up arrive as separate events with the same call ID
+export const CALL_INVITE_EVENT = 'm.call.invite';
+const CALL_ANSWER_EVENT = 'm.call.answer';
+const CALL_HANGUP_EVENT = 'm.call.hangup';
+const CALL_REJECT_EVENT = 'm.call.reject';
+export const CALL_OUTCOME_EVENTS = new Set([CALL_ANSWER_EVENT, CALL_HANGUP_EVENT, CALL_REJECT_EVENT]);
+const BUSY_HANGUP_REASONS = new Set(['user_busy', 'busy']);
+
+function findCallEvents(room: Room | undefined, callId: string) {
+  const found: Record<string, MatrixEvent | undefined> = {};
+  room?.getUnfilteredTimelineSet().getTimelines().forEach((timeline) => {
+    timeline.getEvents().forEach((candidate) => {
+      const type = candidate.getType();
+      if (!CALL_OUTCOME_EVENTS.has(type) || candidate.getContent().call_id !== callId) return;
+      if (!found[type] || found[type].getTs() > candidate.getTs()) found[type] = candidate;
+    });
+  });
+  return found;
+}
+
+export function findCallInvite(room: Room, callId: string) {
+  let invite: MatrixEvent | undefined;
+  room.getUnfilteredTimelineSet().getTimelines().forEach((timeline) => {
+    timeline.getEvents().forEach((candidate) => {
+      if (candidate.getType() === CALL_INVITE_EVENT && candidate.getContent().call_id === callId) invite = candidate;
+    });
+  });
+  return invite;
+}
+
+function buildCallAction(event: MatrixEvent, room?: Room): ApiMessageAction {
+  const content = event.getContent();
+  const callId = String(content.call_id || event.getId());
+  const sdp = (content.offer as { sdp?: string } | undefined)?.sdp || '';
+  const isVideo = /\nm=video /.test(sdp) || undefined;
+  const {
+    [CALL_ANSWER_EVENT]: answer, [CALL_HANGUP_EVENT]: hangup, [CALL_REJECT_EVENT]: reject,
+  } = findCallEvents(room, callId);
+
+  let reason: ApiPhoneCallDiscardReason | undefined;
+  let duration: number | undefined;
+  if (answer) {
+    if (hangup) {
+      reason = 'hangup';
+      duration = Math.max(0, Math.round((hangup.getTs() - answer.getTs()) / 1000));
+    }
+  } else if (reject || (hangup && BUSY_HANGUP_REASONS.has(String(hangup.getContent().reason)))) {
+    reason = 'busy';
+  } else {
+    const lifetime = Number(content.lifetime) || 0;
+    // Hung up before anyone answered, or the ringing ran out
+    if (hangup || (lifetime && Date.now() > event.getTs() + lifetime)) reason = 'missed';
+  }
+
+  return omitUndefined({
+    mediaType: 'action', type: 'phoneCall', callId, isVideo, reason, duration,
+  });
+}
+
 function buildMessageContent(
-  event: MatrixEvent, context: ChatContext,
+  event: MatrixEvent, context: ChatContext, room?: Room,
 ): MediaContent | undefined {
   const type = event.getType();
   const content = event.getContent();
   const date = Math.floor(event.getTs() / 1000);
   const { resolvePeerId } = context;
+
+  if (type === CALL_INVITE_EVENT) {
+    return { action: buildCallAction(event, room) };
+  }
+
+  if (type === GROUP_CALL_MEMBER_EVENT) {
+    const callId = String(event.getContent().call_id);
+    return {
+      action: omitUndefined({
+        mediaType: 'action',
+        type: 'groupCall',
+        call: { id: callId, accessHash: '0' },
+        duration: room ? getGroupCallDuration(room, callId, event.getTs()) : undefined,
+      }) as ApiMessageAction,
+    };
+  }
 
   if (event.isDecryptionFailure() || type === EventType.RoomMessageEncrypted) {
     const text = `${UNDECRYPTABLE_TEXT}\n${getUndecryptableHint(event)}`;
@@ -684,6 +762,10 @@ export function isDisplayableEvent(
       return !context.isPrivate;
     case RETENTION_EVENT:
       return true;
+    case CALL_INVITE_EVENT:
+      return true;
+    case GROUP_CALL_MEMBER_EVENT:
+      return Boolean(event.getContent().started);
     case EventType.RoomMember: {
       if (context.isPrivate) return false;
       const membership = event.getContent().membership;
@@ -781,7 +863,7 @@ export function buildApiMessage(
   const sender = event.getSender()!;
   const isState = event.isState();
   const action = isState ? buildStateAction(event, room, context) : undefined;
-  const content = isState ? (action ? { action } : undefined) : buildMessageContent(event, context);
+  const content = isState ? (action ? { action } : undefined) : buildMessageContent(event, context, room);
   if (!content) return undefined;
 
   const todo = !isState && !event.isDecryptionFailure()

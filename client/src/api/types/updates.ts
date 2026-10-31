@@ -889,6 +889,27 @@ export type ApiUpdateMatrixCallEvent = {
   age: number;
 };
 
+export type ApiMatrixGroupCallParticipant = {
+  peerId: string;
+  userId: string;
+  deviceId: string;
+};
+
+export type ApiUpdateMatrixGroupCall = {
+  '@type': 'updateMatrixGroupCall';
+  chatId: string;
+  // No call while nobody is in one
+  callId?: string;
+  participants: ApiMatrixGroupCallParticipant[];
+};
+
+export type ApiUpdateMatrixGroupCallSignal = {
+  '@type': 'updateMatrixGroupCallSignal';
+  fromUserId: string;
+  fromDeviceId: string;
+  content: Record<string, any>;
+};
+
 export type ApiUpdateFetchingDifference = {
   '@type': 'updateFetchingDifference';
   isFetching: boolean;
@@ -1066,7 +1087,7 @@ export type ApiUpdateWebPage = {
 };
 
 export type ApiUpdate = (
-  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateMatrixCallEvent | ApiUpdateDeviceVerification | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
+  ApiUpdateReady | ApiUpdateEncryptionKeysMissing | ApiUpdateMatrixCallEvent | ApiUpdateMatrixGroupCall | ApiUpdateMatrixGroupCallSignal | ApiUpdateDeviceVerification | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
   ApiUpdateAuthorizationState | ApiUpdateAuthorizationError | ApiUpdateConnectionState | ApiUpdateCurrentUser |
   ApiUpdateChat | ApiUpdateChatTypingStatus | ApiUpdateChatFullInfo | ApiUpdatePinnedChatIds |
   ApiUpdateChatMembers | ApiUpdateChatParticipantRank | ApiUpdateChatJoin | ApiUpdateChatLeave

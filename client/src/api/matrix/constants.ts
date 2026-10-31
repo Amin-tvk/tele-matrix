@@ -3,6 +3,9 @@ export const MATRIX_HOMESERVER_URL = (import.meta.env.TG_APP_MATRIX_HOMESERVER |
 
 // Where the client API is reached. When the site proxies /_matrix on its own address, requests stay same-origin
 // and skip the CORS preflight a cross-site call needs, saving a round trip each
+// The admin API is only exposed on the homeserver's own address, not on the site's same-origin route
+export const ADMIN_REQUEST_OPTS = { prefix: '/_synapse/admin', baseUrl: MATRIX_HOMESERVER_URL };
+
 export const MATRIX_CLIENT_API_URL = (import.meta.env.TG_APP_MATRIX_CLIENT_API || MATRIX_HOMESERVER_URL)
   .replace(/\/$/, '');
 
@@ -55,3 +58,7 @@ export const REACTION_USAGE_EVENT = 'im.peyvand.reaction_usage';
 
 // Matrix VoIP signaling for one-to-one calls: invite, answer, candidates, select_answer, reject, hangup
 export const CALL_EVENT_PREFIX = 'm.call.';
+
+// Group voice chats (see groupCalls.ts)
+export const GROUP_CALL_MEMBER_EVENT = 'im.peyvand.group_call.member';
+export const GROUP_CALL_SIGNAL_EVENT = 'im.peyvand.group_call.signal';

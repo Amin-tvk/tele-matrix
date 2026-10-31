@@ -33,6 +33,7 @@ import {
   selectUserFullInfo,
 } from '../../global/selectors';
 import { ARE_CALLS_SUPPORTED, ARE_PHONE_CALLS_SUPPORTED, IS_APP } from '../../util/browser/windowEnvironment';
+import { joinMatrixGroupCall } from '../../util/calls/matrixGroupCall';
 import { isUserId } from '../../util/entities/ids';
 import focusNoScroll from '../../util/focusNoScroll';
 
@@ -66,6 +67,7 @@ interface StateProps {
   canSubscribe?: boolean;
   canSearch?: boolean;
   canCall?: boolean;
+  canVoiceChat?: boolean;
   canMute?: boolean;
   canViewStatistics?: boolean;
   canViewMonetization?: boolean;
@@ -96,6 +98,7 @@ const HeaderActions = ({
   canSubscribe,
   canSearch,
   canCall,
+  canVoiceChat,
   canMute,
   canViewStatistics,
   canViewMonetization,
@@ -367,6 +370,16 @@ const HeaderActions = ({
               iconName="phone"
             />
           )}
+          {canVoiceChat && (
+            <Button
+              round
+              color="translucent"
+              size="smaller"
+              onClick={() => void joinMatrixGroupCall(chatId)}
+              ariaLabel="Voice chat"
+              iconName="voice-chat"
+            />
+          )}
         </>
       )}
       {!isForForum && Boolean(pendingJoinRequests) && (
@@ -467,6 +480,7 @@ export default memo(withGlobal<OwnProps>(
     const canSearch = isMainThread || isDiscussionThread;
     const canCall = ARE_PHONE_CALLS_SUPPORTED && isUserId(chat.id) && !isChatWithSelf && !bot && !chat.isSupport
       && !isAnonymousForwardsChat(chat.id);
+    const canVoiceChat = ARE_PHONE_CALLS_SUPPORTED && !isUserId(chat.id) && !isChannel && !chat.isNotJoined;
     const canMute = isMainThread && !isChatWithSelf && !canSubscribe;
     const canLeave = isSavedDialog || (isMainThread && !canSubscribe);
     const canEnterVoiceChat = ARE_CALLS_SUPPORTED && isMainThread && chat.isCallActive;
@@ -494,6 +508,7 @@ export default memo(withGlobal<OwnProps>(
       canSubscribe,
       canSearch,
       canCall,
+      canVoiceChat,
       canMute,
       canViewStatistics,
       canViewMonetization,

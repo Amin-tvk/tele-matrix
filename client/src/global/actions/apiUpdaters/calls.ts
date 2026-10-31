@@ -2,6 +2,7 @@ import type { ActionReturnType } from '../../types';
 
 import { ARE_CALLS_SUPPORTED, ARE_PHONE_CALLS_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import { handleMatrixCallEvent } from '../../../util/calls/matrixCall';
+import { handleMatrixGroupCallSignal, handleMatrixGroupCallUpdate } from '../../../util/calls/matrixGroupCall';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { omit } from '../../../util/iteratees';
 import { notifyAboutCall } from '../../../util/notifications';
@@ -37,6 +38,12 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       initializeSounds();
       return updateTabState(global, { isCallPanelVisible: false }, getCurrentTabId());
     }
+    case 'updateMatrixGroupCall':
+      handleMatrixGroupCallUpdate(update);
+      return undefined;
+    case 'updateMatrixGroupCallSignal':
+      void handleMatrixGroupCallSignal(update);
+      return undefined;
     case 'updateGroupCall': {
       if (update.call.connectionState === 'discarded') {
         if (global.groupCalls.activeGroupCallId) {

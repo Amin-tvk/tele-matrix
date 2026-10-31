@@ -14,6 +14,9 @@ export {
 } from '../../matrix/verification';
 export { setMyBadgeEmoji, setPeerVerified } from '../../matrix/verifiedBadges';
 export {
+  fetchMatrixGroupCall, sendMatrixGroupCallMember, sendMatrixGroupCallSignal,
+} from '../../matrix/groupCalls';
+export {
   fetchEmergencyRecipients, sendEmergencyAlert, setEmergencyRecipients,
 } from '../../matrix/emergency';
 export { setChannelComments } from '../../matrix/methods';

@@ -36,9 +36,13 @@ import {
   buildApiMessage,
   buildApiUser,
   buildReactions,
+  CALL_INVITE_EVENT,
+  CALL_OUTCOME_EVENTS,
   countPostViews,
+  findCallInvite,
   getMemberTag,
   getReplyTargetEventId,
+  getRoomMembers,
   isDisplayableEvent,
   isRoomChannel,
   setKeyBackupActive,
@@ -48,19 +52,20 @@ import {
   getThreadSummary, isCommentEvent, removeCommentFromSummary, setThreadSummaryCount,
 } from './comments';
 import {
-  CALL_EVENT_PREFIX, INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT,
+  CALL_EVENT_PREFIX, GROUP_CALL_MEMBER_EVENT, GROUP_CALL_SIGNAL_EVENT, INITIAL_SYNC_LIMIT, MEMBER_TAG_EVENT, MEMBER_TAG_KEY_PREFIX, PERMISSIONS_EVENT,
   QUICK_REACTION_EVENT, SYNC_POLL_TIMEOUT_MS,
 } from './constants';
+import { ensureEmergencyRegistry } from './emergency';
 import {
   cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict, markDeviceBroken,
 } from './encryption';
 import { handleFoldersAccountData } from './folders';
+import { handleGroupCallMemberEvent, handleGroupCallSignal, stopGroupCalls } from './groupCalls';
 import {
   findMessageId, getChatIdByRoomId, getEventId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
   isUserPeerId,
 } from './ids';
 import { getCachedUserStatus, startLastSeenPolling, stopLastSeenPolling } from './lastSeen';
-import { ensureEmergencyRegistry } from './emergency';
 import { abortOverdueSync, fetchWithDeadline, setKeyUploadConflictHandler } from './network';
 import { handleReactionUsageAccountData } from './reactionUsage';
 import { getRoomTtlSeconds, isExpiredEvent } from './retention';
@@ -367,6 +372,7 @@ export async function stopClient(shouldClearData: boolean) {
   stopLastSeenPolling();
   stopExpirySweep();
   stopBackupRecheck();
+  stopGroupCalls();
   if (currentClient) {
     currentClient.stopClient();
     currentClient.removeAllListeners();
@@ -1124,9 +1130,22 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
     return;
   }
 
+  if (type === GROUP_CALL_MEMBER_EVENT) {
+    handleGroupCallMemberEvent(event, room);
+    // Only the first join of a call stays in the chat, as its entry
+    if (!event.getContent().started) return;
+  }
+
   if (type.startsWith(CALL_EVENT_PREFIX)) {
     handleCallEvent(event, room);
-    return;
+    // The invite also goes on as the call's entry in the chat; the answer and hang-up update that entry
+    if (type !== CALL_INVITE_EVENT) {
+      if (CALL_OUTCOME_EVENTS.has(type)) {
+        const invite = findCallInvite(room, String(event.getContent().call_id));
+        if (invite) sendMessageUpdate(room, invite);
+      }
+      return;
+    }
   }
 
   if (!isRoomVisible(room)) return;
@@ -1191,8 +1210,19 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
 }
 
 // Calls only happen in private chats; the main thread runs the call and answers through `sendMatrixCallEvent`
+// Chats made by other apps (or through the API) may lack the "direct" marker. A call in an unnamed room of just two
+// people still makes it the private chat with the caller, so the call can be answered there
+function adoptCallRoomAsDirect(room: Room, sender: string) {
+  if (sender === myUserId || room.currentState.getStateEvents(EventType.RoomName, '')?.getContent().name) return;
+  const members = getRoomMembers(room).map((member) => member.userId);
+  if (members.length !== 2 || !members.includes(sender) || !members.includes(myUserId)) return;
+  setDmRoom(sender, room.roomId);
+  announceChat(room, true);
+}
+
 function handleCallEvent(event: MatrixEvent, room: Room) {
   const sender = event.getSender();
+  if (sender && !getDmUserId(room) && event.getType() === CALL_INVITE_EVENT) adoptCallRoomAsDirect(room, sender);
   const dmUserId = getDmUserId(room);
   if (!sender || !dmUserId || (sender !== dmUserId && sender !== myUserId)) return;
   onUpdate({
@@ -1205,7 +1235,7 @@ function handleCallEvent(event: MatrixEvent, room: Room) {
   });
 }
 
-function sendMessageUpdate(room: Room, event: MatrixEvent) {
+export function sendMessageUpdate(room: Room, event: MatrixEvent) {
   const message = buildApiMessage(event, room, { ...getChatContext(room), withComments: true });
   if (!message) return;
   onUpdate({
@@ -1383,6 +1413,10 @@ function handleUserProfile(event: MatrixEvent | undefined, user: User) {
 
 function handleToDeviceEvent(event: MatrixEvent) {
   const sender = event.getSender();
+  if (event.getType() === GROUP_CALL_SIGNAL_EVENT) {
+    handleGroupCallSignal(event);
+    return;
+  }
   if (event.getType() === STORY_VIEW_EVENT && sender) handleStoryViewEvent(sender, event.getContent());
 }
 

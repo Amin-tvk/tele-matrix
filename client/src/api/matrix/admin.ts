@@ -3,6 +3,7 @@ import { Method } from 'matrix-js-sdk';
 import {
   buildUser, getClient, getMyUserId, hasClient, onUpdate, rememberProfile,
 } from './client';
+import { ADMIN_REQUEST_OPTS } from './constants';
 import { getPeerIdByUserId } from './ids';
 import { refreshVerifiedBadges } from './verifiedBadges';
 import { isVerifiedId } from './verifiedState';
@@ -10,7 +11,6 @@ import { isVerifiedId } from './verifiedState';
 // Server administration through the Synapse admin API. Every request is authorized by the server,
 // so these methods only work for accounts marked as server admins
 
-const ADMIN_PREFIX = '/_synapse/admin';
 const USERS_PAGE_SIZE = 100;
 
 export type AdminUser = {
@@ -57,7 +57,7 @@ type SynapseToken = {
 };
 
 function adminRequest<T>(method: Method, path: string, query?: Record<string, string>, body?: object) {
-  return getClient().http.authedRequest<T>(method, path, query, body, { prefix: ADMIN_PREFIX });
+  return getClient().http.authedRequest<T>(method, path, query, body, ADMIN_REQUEST_OPTS);
 }
 
 function getFullUserId(username: string) {
@@ -253,10 +253,10 @@ export async function fetchAdminChannels({ query }: { query?: string }) {
   }));
 
   return checked.filter(Boolean).map((room): AdminChannel => ({
-    roomId: room!.room_id,
-    name: room!.name!,
-    alias: room!.canonical_alias || undefined,
-    membersCount: room!.joined_members,
-    isVerified: isVerifiedId(room!.room_id),
+    roomId: room.room_id,
+    name: room.name!,
+    alias: room.canonical_alias || undefined,
+    membersCount: room.joined_members,
+    isVerified: isVerifiedId(room.room_id),
   }));
 }

@@ -16,6 +16,7 @@ import type {
   ApiEmojiGroup,
   ApiEmojiStatusType,
   ApiGroupCall,
+  ApiMatrixGroupCallParticipant,
   ApiMessage,
   ApiMessagePoll,
   ApiNotifyPeerType,
@@ -69,8 +70,7 @@ import type {
   ApiWalletUserAddress,
   ApiWallpaper,
   ApiWebPage,
-  ApiWebSession,
-} from '../../api/types';
+  ApiWebSession } from '../../api/types';
 import type {
   AccountSettings,
   AttachmentCompression,
@@ -329,6 +329,18 @@ export type GlobalState = {
   };
 
   phoneCall?: ApiPhoneCall;
+  // Group voice chats over Matrix (util/calls/matrixGroupCall.ts)
+  matrixGroupCalls?: {
+    byChatId: Record<string, { callId?: string; participants: ApiMatrixGroupCallParticipant[] }>;
+    active?: {
+      chatId: string;
+      callId: string;
+      isMuted: boolean;
+      // Participants (`userId|deviceId`) with a live connection, and those currently speaking
+      connectedKeys: string[];
+      speakingKeys: string[];
+    };
+  };
 
   fileUploads: {
     byMessageKey: Record<string, {

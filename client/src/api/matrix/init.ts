@@ -9,8 +9,10 @@ import {
   getClient, hasClient, onUpdate, retryConnectionNow, startClient, stopClient,
 } from './client';
 import * as directory from './directory';
+import { fetchEmergencyRecipients, sendEmergencyAlert, setEmergencyRecipients } from './emergency';
 import * as encryption from './encryption';
 import * as folders from './folders';
+import { fetchMatrixGroupCall, sendMatrixGroupCallMember, sendMatrixGroupCallSignal } from './groupCalls';
 import * as lastSeen from './lastSeen';
 import { downloadMedia } from './media';
 import * as methods from './methods';
@@ -59,6 +61,12 @@ const handlers: Record<string, (...args: any[]) => unknown> = {
   ...folders,
   ...lastSeen,
   ...verification,
+  fetchEmergencyRecipients,
+  setEmergencyRecipients,
+  sendEmergencyAlert,
+  fetchMatrixGroupCall,
+  sendMatrixGroupCallMember,
+  sendMatrixGroupCallSignal,
   setPeerVerified,
   setMyBadgeEmoji,
   destroy,

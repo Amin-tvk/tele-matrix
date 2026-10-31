@@ -5,6 +5,7 @@ import {
 import { DEBUG } from '../../config';
 import { fetchIsServerAdmin } from './admin';
 import { getClient, getMyUserId, hasClient } from './client';
+import { ADMIN_REQUEST_OPTS } from './constants';
 import { ensureDirectRoomForUser } from './methods';
 
 // Anyone can raise an emergency alert. It goes as a direct message to the people server admins named for it, kept
@@ -13,6 +14,8 @@ import { ensureDirectRoomForUser } from './methods';
 
 const REGISTRY_ALIAS_LOCALPART = 'peyvand-emergency';
 const RECIPIENTS_EVENT = 'im.peyvand.emergency_recipients';
+// The server's admins, refreshed by any admin's app: the fallback while nobody is named
+const ADMINS_EVENT = 'im.peyvand.emergency_admins';
 const REGISTRY_ROOM_VERSION = '11';
 const ADMIN_POWER_LEVEL = 100;
 const POWER_LEVELS_EVENT: string = EventType.RoomPowerLevels;
@@ -57,7 +60,7 @@ async function createRegistryRoom() {
     power_level_content_override: {
       events_default: ADMIN_POWER_LEVEL,
       state_default: ADMIN_POWER_LEVEL,
-      events: { [RECIPIENTS_EVENT]: ADMIN_POWER_LEVEL },
+      events: { [RECIPIENTS_EVENT]: ADMIN_POWER_LEVEL, [ADMINS_EVENT]: ADMIN_POWER_LEVEL },
     },
   });
   registryRoomId = roomId;
@@ -68,19 +71,44 @@ async function createRegistryRoom() {
 async function joinRegistryAsAdmin(roomId: string) {
   await getClient().http.authedRequest(
     Method.Post, `/v1/rooms/${encodeURIComponent(roomId)}/make_room_admin`, undefined,
-    { user_id: getMyUserId() }, { prefix: '/_synapse/admin' },
+    { user_id: getMyUserId() }, ADMIN_REQUEST_OPTS,
   );
 }
 
-// Called once a server admin is signed in, so alerts have somewhere to go before anyone was named
-export async function ensureEmergencyRegistry() {
-  if (!hasClient() || await resolveRegistryRoomId()) return;
-  if (!await fetchIsServerAdmin()) return;
+async function fetchServerAdmins() {
+  const { users } = await getClient().http.authedRequest<{ users: { name: string; deactivated?: boolean }[] }>(
+    Method.Get, '/v2/users', { admins: 'true', deactivated: 'false', limit: '100' }, undefined, ADMIN_REQUEST_OPTS,
+  );
+  return users.filter((user) => !user.deactivated).map((user) => user.name).sort();
+}
+
+async function writeRegistryState(roomId: string, type: string, content: Record<string, unknown>) {
+  const client = getClient();
   try {
-    await createRegistryRoom();
+    await client.sendStateEvent(roomId, type as never, content as never, '');
+  } catch {
+    await joinRegistryAsAdmin(roomId);
+    await client.sendStateEvent(roomId, type as never, content as never, '');
+  }
+}
+
+// Run by a server admin's app after each sign-in: creates the registry if needed and keeps its admin list current,
+// so alerts reach today's admins while nobody is named
+export async function ensureEmergencyRegistry() {
+  if (!hasClient() || !await fetchIsServerAdmin()) return;
+  try {
+    const roomId = await resolveRegistryRoomId() || await createRegistryRoom();
+    const admins = await fetchServerAdmins();
+    const events = await getClient().http.authedRequest<StateEvent[]>(
+      Method.Get, `/rooms/${encodeURIComponent(roomId)}/state`,
+    );
+    const current = events.find(({ type, state_key: key }) => type === ADMINS_EVENT && key === '')?.content.user_ids;
+    if (JSON.stringify(current) !== JSON.stringify(admins)) {
+      await writeRegistryState(roomId, ADMINS_EVENT, { user_ids: admins });
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
-    if (DEBUG) console.warn('[matrix] Creating the emergency registry failed', err);
+    if (DEBUG) console.warn('[matrix] Updating the emergency registry failed', err);
   }
 }
 
@@ -94,12 +122,17 @@ export async function fetchEmergencyRecipients(): Promise<EmergencyRecipients> {
   const userIds = Array.isArray(named) ? named.filter((id): id is string => typeof id === 'string') : [];
   if (userIds.length) return { userIds, isDefault: false };
 
+  const admins = events.find(({ type, state_key: key }) => type === ADMINS_EVENT && key === '')?.content.user_ids;
+  if (Array.isArray(admins)) {
+    return { userIds: admins.filter((id): id is string => typeof id === 'string'), isDefault: true };
+  }
+  // Registries from before the admin list: whoever runs the room
   const powerLevels = events.find(({ type }) => type === POWER_LEVELS_EVENT)?.content.users as
     Record<string, number> | undefined;
-  const admins = Object.entries(powerLevels || {})
+  const roomAdmins = Object.entries(powerLevels || {})
     .filter(([, level]) => level >= ADMIN_POWER_LEVEL)
     .map(([userId]) => userId);
-  return { userIds: admins, isDefault: true };
+  return { userIds: roomAdmins, isDefault: true };
 }
 
 // Accepts full IDs or bare usernames on this server; returns the list as saved, or undefined for a non-admin
@@ -113,15 +146,8 @@ export async function setEmergencyRecipients({ userIds }: { userIds: string[] })
     .map((id) => (id.startsWith('@') ? id : `@${id}`))
     .map((id) => id.toLowerCase()))];
 
-  const client = getClient();
   const roomId = await resolveRegistryRoomId() || await createRegistryRoom();
-  const content = { user_ids: normalized, by: getMyUserId() };
-  try {
-    await client.sendStateEvent(roomId, RECIPIENTS_EVENT as never, content as never, '');
-  } catch {
-    await joinRegistryAsAdmin(roomId);
-    await client.sendStateEvent(roomId, RECIPIENTS_EVENT as never, content as never, '');
-  }
+  await writeRegistryState(roomId, RECIPIENTS_EVENT, { user_ids: normalized, by: getMyUserId() });
   return normalized;
 }
 

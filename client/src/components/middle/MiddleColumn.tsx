@@ -82,6 +82,7 @@ import usePinnedMessage from './hooks/usePinnedMessage';
 import useSwipeBack from './hooks/useSwipeBack';
 import useFluidBackgroundFilter from './message/hooks/useFluidBackgroundFilter';
 
+import MatrixGroupCallPill from '../calls/matrix/MatrixGroupCallPill';
 import Composer from '../common/Composer';
 import PrivacySettingsNoticeModal from '../common/PrivacySettingsNoticeModal.async';
 import SeenByModal from '../common/SeenByModal.async';
@@ -629,6 +630,7 @@ function MiddleColumn({
               getLoadingPinnedId={getLoadingPinnedId}
               onFocusPinnedMessage={handleFocusPinnedMessage}
             />
+            <MatrixGroupCallPill chatId={renderingChatId!} />
             <MiddleHeaderPanesIsland
               chatId={renderingChatId!}
               threadId={renderingThreadId!}

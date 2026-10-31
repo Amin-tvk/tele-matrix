@@ -2100,12 +2100,12 @@
 "ActionPinnedMediaPoll" = "a poll";
 "ActionPinnedMediaGiveaway" = "a giveaway";
 "ActionPinnedMediaGiveawayResults" = "giveaway results";
-"ActionGroupCallStartedGroup" = "{from} started a video chat";
+"ActionGroupCallStartedGroup" = "{from} started a voice chat";
 "ActionGroupCallStartedChannel" = "Live stream started";
 "ActionGroupCallScheduledGroup" = "{from} scheduled a video chat for {date}";
 "ActionGroupCallScheduledChannel" = "Live stream scheduled for {date}";
 "ActionGroupCallFinishedChannel" = "Live stream finished ({duration})";
-"ActionGroupCallFinishedGroup" = "{from} ended the video chat ({duration})";
+"ActionGroupCallFinishedGroup" = "Voice chat ended ({duration})";
 "ActionExpiredVoice" = "Expired voice message";
 "ActionExpiredVideo" = "Expired video message";
 "ActionAddUser" = "{from} added {user}";

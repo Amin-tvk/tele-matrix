@@ -7,6 +7,7 @@ import { fetchIsServerAdmin } from './admin';
 import {
   buildChat, buildUser, getClient, getMyUserId, getVisibleRooms, hasClient, onUpdate,
 } from './client';
+import { ADMIN_REQUEST_OPTS } from './constants';
 import { getRoomIdByGroupChatId, getUserIdByPeerId, isUserPeerId } from './ids';
 import { applyProfileStories } from './stories';
 import { STORIES_PROFILE_FIELD } from './storiesState';
@@ -153,7 +154,7 @@ async function createRegistryRoom() {
 async function joinRegistryAsAdmin(roomId: string) {
   await getClient().http.authedRequest(
     Method.Post, `/v1/rooms/${encodeURIComponent(roomId)}/make_room_admin`, undefined,
-    { user_id: getMyUserId() }, { prefix: '/_synapse/admin' },
+    { user_id: getMyUserId() }, ADMIN_REQUEST_OPTS,
   );
 }
 
