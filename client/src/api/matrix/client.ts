@@ -298,12 +298,54 @@ function stopExpirySweep() {
   expiredEventIds.clear();
 }
 
+// Keys for a message often reach the backup after this device asked for them: another of the user's devices that
+// was offline gets them later and uploads them then. While messages here can't be read, the backup is checked
+// again and downloaded whenever it has grown
+const BACKUP_RECHECK_INTERVAL_MS = 60 * 1000;
+let backupRecheckInterval: ReturnType<typeof setInterval> | undefined;
+let lastBackupEtag: string | undefined;
+let isBackupRecheckRunning = false;
+
+async function recheckKeyBackup() {
+  const crypto = client?.getCrypto();
+  if (!client || !crypto || !undecryptableEventIds.size || isBackupRecheckRunning) return;
+  isBackupRecheckRunning = true;
+  try {
+    if (!await crypto.getActiveSessionBackupVersion()) return;
+    // Straight from the server: the SDK's own backup info is a copy that isn't refreshed
+    const info = await client.http.authedRequest<{ version?: string; etag?: string; count?: number }>(
+      Method.Get, '/room_keys/version',
+    );
+    const etag = info.version ? `${info.version}:${info.etag ?? info.count}` : undefined;
+    if (!etag || etag === lastBackupEtag) return;
+    // The first check after start-up downloads too: keys may have arrived while the app was closed
+    lastBackupEtag = etag;
+    await crypto.restoreKeyBackup();
+  } catch (err) {
+    if (DEBUG) console.warn('[matrix] Backup recheck failed', err);
+  } finally {
+    isBackupRecheckRunning = false;
+  }
+}
+
+function startBackupRecheck() {
+  stopBackupRecheck();
+  backupRecheckInterval = setInterval(recheckKeyBackup, BACKUP_RECHECK_INTERVAL_MS);
+}
+
+function stopBackupRecheck() {
+  if (backupRecheckInterval) clearInterval(backupRecheckInterval);
+  backupRecheckInterval = undefined;
+  lastBackupEtag = undefined;
+}
+
 export async function stopClient(shouldClearData: boolean) {
   const currentClient = client;
   client = undefined;
   stopReconnectProbes();
   stopLastSeenPolling();
   stopExpirySweep();
+  stopBackupRecheck();
   if (currentClient) {
     currentClient.stopClient();
     currentClient.removeAllListeners();
@@ -926,6 +968,7 @@ function handleSync(state: SyncState, prevState: SyncState | null) {
     startLastSeenPolling();
     startVerifiedBadgesPolling();
     startExpirySweep();
+    startBackupRecheck();
     syncDeferred.resolve();
     // The config may have been loaded before the account data arrived
     onUpdate({ '@type': 'updateConfig' });
@@ -1344,8 +1387,12 @@ function handleDecrypted(event: MatrixEvent) {
   if (!eventId || !roomId || !client || !isSyncPrepared) return;
   // A decrypted event may turn out to be a hidden one, such as a reaction, which changes the unread count
   scheduleUnreadCountsUpdate();
-  if (event.isDecryptionFailure()) requestRecoveryPrompt();
-  if (!undecryptableEventIds.has(eventId) || event.isDecryptionFailure()) return;
+  if (event.isDecryptionFailure()) {
+    undecryptableEventIds.add(eventId);
+    requestRecoveryPrompt();
+    return;
+  }
+  if (!undecryptableEventIds.has(eventId)) return;
   undecryptableEventIds.delete(eventId);
   const room = client.getRoom(roomId);
   if (room) sendMessageUpdate(room, event);
