@@ -14,7 +14,8 @@ An Android app that opens Tele inside itself and can disguise itself as a calcul
 - No notifications (removed in version 3 by request). The app keeps nothing of the login outside Tele itself.
 - No service worker inside the app: the files are already on the phone, and the worker only added cache lookups and 3-second network races to every start.
 - Downloads from Tele are saved to the phone's Downloads folder.
-- The app checks `android-version.txt` on the website twice a day and offers the new APK when there is one.
+- The app checks `android-version.txt` on the website twice a day and offers the new APK when there is one. From version 8 the update downloads inside the app and goes straight to Android's installer (the first time, Android asks to allow installs from this app). Versions 7 and older open the download in the browser instead; once they install version 8, later updates are in-app.
+- **Panic:** with the calculator lock on, pressing `=` three times within 2 seconds makes Tele send the emergency alert (marked as a panic) to the emergency contacts and sign out, then the app erases everything Tele kept on the phone (web storage, cookies, caches). The calculator looks unchanged and the lock stays on; the account and messages stay on the server.
 - Download link to share: **https://tele.peyvand-yar.ir/download**. It always serves the latest build. ArvanCloud caches anything ending in `.apk` whatever the headers say, so the production nginx (`/etc/nginx/conf.d/tele.conf`) serves `/download` (no extension, so it isn't cached) from the site's `calculator.apk`, with the APK type and filename, and redirects `/calculator.apk` there.
 - Turning the calculator lock on, or changing the calculation, always shows the warning first (forgetting it means clearing the app's data).
 

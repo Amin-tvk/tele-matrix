@@ -18,7 +18,13 @@ final class CalculatorView extends LinearLayout {
     interface Listener {
         // True when the typed keys were used for something else and the calculator should not show a result
         boolean onEquals(String keys);
+
+        // "=" pressed three times in a row, quickly: the panic gesture
+        default void onPanic() {}
     }
+
+    private static final long PANIC_WINDOW_MS = 2000;
+    private final long[] equalsPressedAt = new long[3];
 
     private static final String[][] KEYS = {
         {"AC", "( )", "%", "÷"},
@@ -170,7 +176,11 @@ final class CalculatorView extends LinearLayout {
                 }
                 break;
             case "=":
-                pressEquals();
+                if (isPanicGesture()) {
+                    if (listener != null) listener.onPanic();
+                } else {
+                    pressEquals();
+                }
                 return;
             case "( )":
                 startTyping(false);
@@ -248,6 +258,17 @@ final class CalculatorView extends LinearLayout {
 
     private char last() {
         return expression.charAt(expression.length() - 1);
+    }
+
+    private boolean isPanicGesture() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        equalsPressedAt[0] = equalsPressedAt[1];
+        equalsPressedAt[1] = equalsPressedAt[2];
+        equalsPressedAt[2] = now;
+        if (equalsPressedAt[0] == 0 || now - equalsPressedAt[0] > PANIC_WINDOW_MS) return false;
+        // The next three presses start a new count
+        java.util.Arrays.fill(equalsPressedAt, 0);
+        return true;
     }
 
     private void pressEquals() {

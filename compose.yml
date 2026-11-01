@@ -172,6 +172,21 @@ services:
     depends_on: [synapse]
     networks: [backend, frontend]
 
+  # Optional voice message transcription (docs/transcription.md); needs ~2.5 GB RAM.
+  # Enable with: docker compose --profile transcribe up -d, and route /transcribe on the web host to it
+  transcriber:
+    build: ./server/transcriber
+    image: ${PEYVAND_TRANSCRIBER_IMAGE:-peyvand-transcriber}
+    restart: unless-stopped
+    profiles: [transcribe]
+    environment:
+      HOST: 0.0.0.0
+      HOMESERVER_URL: http://synapse:8008
+    volumes:
+      - ./data/transcriber-models:/models
+    depends_on: [synapse]
+    networks: [backend, frontend]
+
   # Optional proxy for reaching Telegram where it is filtered; put an xray client config at
   # data/xray/config.json (see server/xray/config.example.json) and set TELEGRAM_PROXY=socks5h://xray:10808
   xray:

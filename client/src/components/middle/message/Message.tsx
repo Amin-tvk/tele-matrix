@@ -2269,8 +2269,8 @@ export default memo(withGlobal<OwnProps>(
     const senderBoosts = sender && selectIsChatWithSelf(global, sender.id)
       ? (boostsApplied ?? message.senderBoosts) : message.senderBoosts;
 
-    // Voice transcription runs on Telegram's servers and is not available with Matrix
-    const canTranscribeVoice = false;
+    // Voice and round video messages turn into text on this server's own speech recognition
+    const canTranscribeVoice = true;
 
     const viaBusinessBot = viaBusinessBotId ? selectUser(global, viaBusinessBotId) : undefined;
 

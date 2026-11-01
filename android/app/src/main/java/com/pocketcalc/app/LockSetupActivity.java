@@ -35,6 +35,9 @@ public class LockSetupActivity extends Activity {
                 + "calculator again.\n\n"
                 + "IMPORTANT: remember your calculation. It is not saved anywhere and nobody can recover it, "
                 + "not even an admin.\n\n"
+                + "PANIC: pressing = three times quickly on the calculator sends an emergency alert to your "
+                + "emergency contacts, signs you out and erases Tele from this phone. Your account and messages "
+                + "stay on the server; sign in again to get them back.\n\n"
                 + "If you forget it, the only way back in is to clear this app's data in Android settings. That "
                 + "signs you out of Tele on this phone, and encrypted messages you can't restore from your key "
                 + "backup are lost on this phone.")

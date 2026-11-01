@@ -7,6 +7,7 @@ export type AndroidBridge = {
   startFile?: (filename: string, mimeType: string) => string;
   appendFile?: (id: string, base64: string) => boolean;
   finishFile?: (id: string) => void;
+  panicDone?: () => void;
 };
 
 // Base64 grows data by a third; 768 KB chunks keep each call under 1 MB

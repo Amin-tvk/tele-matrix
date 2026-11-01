@@ -71,11 +71,19 @@ public class MainActivity extends Activity {
         fileSaver = new FileSaver(this);
 
         calculator = new CalculatorView(this);
-        calculator.setListener((keys) -> {
-            if (!LockStore.matches(this, keys)) return false;
-            calculator.clear();
-            showTele();
-            return true;
+        calculator.setListener(new CalculatorView.Listener() {
+            @Override
+            public boolean onEquals(String keys) {
+                if (!LockStore.matches(MainActivity.this, keys)) return false;
+                calculator.clear();
+                showTele();
+                return true;
+            }
+
+            @Override
+            public void onPanic() {
+                startPanic();
+            }
         });
         root.addView(calculator, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
@@ -98,7 +106,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         isInOwnScreen = false;
-        if (webView.getVisibility() == View.VISIBLE) onTeleShown();
+        if (webView.getVisibility() == View.VISIBLE) {
+            onTeleShown();
+            Updater.resumePending(this);
+        }
     }
 
     @Override
@@ -319,6 +330,45 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Panic: Tele (always loaded behind the calculator) sends the emergency alert and signs out, then everything
+    // it kept on the phone is erased. The calculator looks unchanged throughout; the lock itself stays on
+    private static final long PANIC_WIPE_TIMEOUT_MS = 30000;
+    private boolean isPanicking;
+
+    private void startPanic() {
+        if (isPanicking) return;
+        isPanicking = true;
+        webView.evaluateJavascript("window.peyvandPanic ? (window.peyvandPanic(), 1) : 0", (result) -> {
+            if (!"1".equals(result)) wipeTele();
+        });
+        root.postDelayed(this::wipeTele, PANIC_WIPE_TIMEOUT_MS);
+    }
+
+    private void wipeTele() {
+        if (!isPanicking) return;
+        isPanicking = false;
+        android.webkit.WebStorage.getInstance().deleteAllData();
+        android.webkit.CookieManager.getInstance().removeAllCookies(null);
+        webView.clearCache(true);
+        webView.clearHistory();
+        webView.clearFormData();
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().clear().apply();
+        forgetNotificationData();
+        deleteRecursively(getCacheDir());
+        // Tele starts over behind the calculator, on its sign-in screen
+        webView.loadUrl(BuildConfig.APP_URL);
+    }
+
+    private static void deleteRecursively(java.io.File file) {
+        java.io.File[] children = file.listFiles();
+        if (children != null) {
+            for (java.io.File child : children) {
+                deleteRecursively(child);
+                child.delete();
+            }
+        }
+    }
+
     // Version 2 checked for messages in the background with a copy of the login; nothing of that is kept now
     private void forgetNotificationData() {
         getSharedPreferences("session", MODE_PRIVATE).edit().clear().apply();
@@ -365,24 +415,19 @@ public class MainActivity extends Activity {
         if (isFinishing() || webView.getVisibility() != View.VISIBLE) return;
         new AlertDialog.Builder(this)
             .setTitle("Update available")
-            .setMessage("A new version of the app is ready. Download it and open the file to install it; "
-                + "you stay signed in.")
-            .setPositiveButton("Download", (dialog, which) -> {
-                // Always the latest build; the site serves it uncached (see android/README.md)
-                Uri apk = Uri.parse(BuildConfig.APP_URL).buildUpon().path("download")
-                    .appendQueryParameter("v", String.valueOf(version)).build();
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, apk));
-                } catch (ActivityNotFoundException ignored) {
-                    // No browser
-                }
-            })
+            .setMessage("A new version of the app is ready. It downloads and installs here; you stay signed in.")
+            .setPositiveButton("Update", (dialog, which) -> Updater.start(this, version))
             .setNegativeButton("Later", null)
             .show();
     }
 
     // What Tele's pages can call
     private class Bridge {
+        @JavascriptInterface
+        public void panicDone() {
+            runOnUiThread(MainActivity.this::wipeTele);
+        }
+
         @JavascriptInterface
         public boolean isCalculatorLockOn() {
             return LockStore.isOn(MainActivity.this);

@@ -5,6 +5,7 @@ import { webLoginHandoffPromise } from './util/webLoginHandoff';
 import './util/handleError';
 import './util/setupServiceWorker';
 import './global/init';
+import './util/panic';
 
 import TeactDOM from './lib/teact/teact-dom';
 import {

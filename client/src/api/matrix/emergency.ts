@@ -152,7 +152,8 @@ export async function setEmergencyRecipients({ userIds }: { userIds: string[] })
 }
 
 // Returns how many people the alert reached and how many could not be reached
-export async function sendEmergencyAlert() {
+// `isPanic`: sent by the Android app's panic gesture, just before it wipes itself
+export async function sendEmergencyAlert({ isPanic }: { isPanic?: boolean } = {}) {
   const client = getClient();
   const myUserId = getMyUserId();
   const { userIds } = await fetchEmergencyRecipients();
@@ -163,13 +164,15 @@ export async function sendEmergencyAlert() {
   const time = new Date().toLocaleString('en-GB', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
-  const body = `🚨 EMERGENCY ALERT\n${myName} (${myUserId}) has declared an emergency.\nSent ${time}.`;
+  const panicNote = isPanic ? 'Tele was wiped from their phone right after.' : '';
+  const body = `🚨 EMERGENCY ALERT\n${myName} (${myUserId}) has declared an emergency.\n`
+    + `${panicNote ? `${panicNote}\n` : ''}Sent ${time}.`;
   const content = {
     msgtype: MsgType.Text,
     body,
     format: 'org.matrix.custom.html',
     formatted_body: `<b>🚨 EMERGENCY ALERT</b><br>${escapeHtml(myName)} (${escapeHtml(myUserId)}) `
-      + `has declared an emergency.<br>Sent ${escapeHtml(time)}.`,
+      + `has declared an emergency.<br>${panicNote ? `${panicNote}<br>` : ''}Sent ${escapeHtml(time)}.`,
     [EMERGENCY_KEY]: { user_id: myUserId, ts: Date.now() },
   };
 

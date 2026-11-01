@@ -180,6 +180,16 @@ async function decryptAttachment(data: ArrayBuffer, file: EncryptedFile) {
   return crypto.subtle.decrypt({ name: 'AES-CTR', counter: base64ToBytes(file.iv), length: 64 }, key, data);
 }
 
+// The file a message carries, decrypted when the chat is encrypted
+export async function fetchMessageAttachment(content: { url?: string; file?: EncryptedFile }) {
+  const mxc = content.file?.url || content.url;
+  if (!mxc) return undefined;
+  const result = await fetchMedia(getMediaDownloadUrl(mxc));
+  if (!result) return undefined;
+  if (!content.file) return { data: result.data, mimeType: result.mimeType };
+  return { data: await decryptAttachment(result.data, content.file), mimeType: content.file.mimetype };
+}
+
 export async function encryptAttachment(data: ArrayBuffer) {
   const keyBytes = crypto.getRandomValues(new Uint8Array(32));
   const iv = new Uint8Array(16);

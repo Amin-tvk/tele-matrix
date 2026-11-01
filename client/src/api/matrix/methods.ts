@@ -117,7 +117,8 @@ import {
   getUserIdByPeerId,
   isUserPeerId,
 } from './ids';
-import { uploadContent, uploadFile } from './media';
+import { fetchMessageAttachment, uploadContent, uploadFile } from './media';
+import { getAuthHeaders } from './session';
 import { recordReactionUsage } from './reactionUsage';
 import { RETENTION_EVENT } from './retention';
 import { retryOnNetworkError } from './retry';
@@ -1913,6 +1914,43 @@ async function sendTodoUpdate(chat: ApiChat, messageId: number, update: Paramete
 
   await sendRoomEvent(room, TODO_UPDATE_EVENT, buildTodoUpdateContent(eventId, update));
   return true;
+}
+
+// Voice messages become text on this server's own speech recognition (see server/transcriber): the audio is
+// decrypted here and sent only when the person asks, and the server keeps nothing
+const TRANSCRIBE_TIMEOUT_MS = 5 * 60 * 1000;
+const transcriptions = new Map<string, string>();
+
+export async function transcribeAudio({ chat, messageId }: { chat: ApiChat; messageId: number }) {
+  const room = requireRoom(chat);
+  const eventId = room ? getEventIdForMessage(room, messageId) : undefined;
+  const event = eventId ? room?.findEventById(eventId) : undefined;
+  if (!event || !eventId) return undefined;
+
+  const known = transcriptions.get(eventId);
+  if (known !== undefined) {
+    onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: known });
+    return eventId;
+  }
+  onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: '', isPending: true });
+
+  try {
+    const audio = await fetchMessageAttachment(event.getContent());
+    if (!audio) return undefined;
+    const response = await withTimeout(fetch(`${self.location.origin}/transcribe`, {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': audio.mimeType || 'application/octet-stream' },
+      body: audio.data,
+    }), TRANSCRIBE_TIMEOUT_MS);
+    if (!response?.ok) return undefined;
+    const { text } = await response.json() as { text?: string };
+    const result = text?.trim() || '…';
+    transcriptions.set(eventId, result);
+    onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: result });
+    return eventId;
+  } catch {
+    return undefined;
+  }
 }
 
 export function toggleTodoCompleted({
