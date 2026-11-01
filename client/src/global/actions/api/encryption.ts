@@ -12,6 +12,19 @@ let lastPromptAt = 0;
 
 const SETUP_PROMPT_INTERVAL = 3 * 24 * 60 * 60 * 1000;
 const SETUP_PROMPT_STORAGE_KEY = 'peyvand-recovery-setup-prompt';
+const RESTORE_MODAL_INTERVAL = 24 * 60 * 60 * 1000;
+const RESTORE_MODAL_STORAGE_KEY = 'peyvand-recovery-restore-modal';
+
+function shouldOpenRestoreModal() {
+  try {
+    const last = Number(localStorage.getItem(RESTORE_MODAL_STORAGE_KEY)) || 0;
+    if (Date.now() - last < RESTORE_MODAL_INTERVAL) return false;
+    localStorage.setItem(RESTORE_MODAL_STORAGE_KEY, String(Date.now()));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // Accounts without a recovery key are reminded now and then, as their encrypted messages are lost on sign out
 function shouldPromptSetup() {
@@ -53,6 +66,16 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
   if (mode === 'setup' && !status.hasKeyBackup && !shouldPromptSetup()) return;
   if (Date.now() - lastPromptAt < RECOVERY_PROMPT_DURATION) return;
   lastPromptAt = Date.now();
+
+  // A device that can't open the account's backup doesn't save its keys there either, so the person's other
+  // devices never get them. A passing notice is easy to miss, so the window itself opens once a day
+  if (mode === 'restore' && status.hasKeyBackup && shouldOpenRestoreModal()) {
+    global = getGlobal();
+    if (!selectTabState(global, getCurrentTabId()).encryptionRecoveryModal) {
+      actions.openEncryptionRecoveryModal({ tabId: getCurrentTabId() });
+    }
+    return;
+  }
 
   const isSetup = mode === 'setup' && !status.hasKeyBackup;
   actions.showNotification({

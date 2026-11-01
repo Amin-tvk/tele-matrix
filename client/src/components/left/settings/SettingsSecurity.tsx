@@ -45,6 +45,8 @@ function describeBackup(status?: EncryptionStatus) {
   if (!status.isAvailable) return 'Not available in this browser';
   if (status.isDeviceBroken) return 'This device needs to be fixed';
   if (!status.hasKeyBackup) return 'Off: old messages are lost on a new device';
+  // The backup exists, but this device can't open it, so the keys it receives aren't saved there
+  if (!status.isBackupActive) return 'Not saving on this device: tap and enter your password or recovery key';
   if (status.isPasswordBased) return 'On, unlocked with your account password';
   return 'On, unlocked with your recovery key';
 }

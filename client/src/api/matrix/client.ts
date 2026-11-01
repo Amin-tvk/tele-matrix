@@ -255,6 +255,7 @@ async function initCrypto(currentClient: MatrixClient, session: MatrixSession, i
   for (let attempt = 1; attempt <= CRYPTO_INIT_ATTEMPTS; attempt++) {
     try {
       await currentClient.initRustCrypto({ cryptoDatabasePrefix: prefix });
+      enableRoomKeyRequests(currentClient);
       setValue(CRYPTO_PREFIX_KEY, prefix);
       void flushStore();
       return;
@@ -270,6 +271,17 @@ async function initCrypto(currentClient: MatrixClient, session: MatrixSession, i
     }
   }
   // Encrypted rooms stay unreadable until the next start, but the keys are kept for it
+}
+
+// The SDK turns key requests off. With them on, a device missing a message's key asks the person's other
+// verified devices for it, so it arrives even when it never reached the backup
+function enableRoomKeyRequests(currentClient: MatrixClient) {
+  const olmMachine = (currentClient.getCrypto() as unknown as {
+    olmMachine?: { roomKeyRequestsEnabled: boolean; roomKeyForwardingEnabled: boolean };
+  } | undefined)?.olmMachine;
+  if (!olmMachine) return;
+  olmMachine.roomKeyRequestsEnabled = true;
+  olmMachine.roomKeyForwardingEnabled = true;
 }
 
 /* Auto-delete */
