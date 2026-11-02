@@ -26,7 +26,7 @@ import type { ChatContext } from './builders';
 import type { MatrixSession } from './session';
 import { MAIN_THREAD_ID } from '../types/messages';
 
-import { DEBUG } from '../../config';
+import { DEBUG, GENERAL_TOPIC_ID } from '../../config';
 import Deferred from '../../util/Deferred';
 import { omitUndefined } from '../../util/iteratees';
 import { pause } from '../../util/schedulers';
@@ -43,8 +43,10 @@ import {
   getMemberTag,
   getReplyTargetEventId,
   getRoomMembers,
+  getRoomPowerLevels,
   isDisplayableEvent,
   isRoomChannel,
+  POWER_LEVEL_ADMIN,
   setKeyBackupActive,
 } from './builders';
 import {
@@ -60,6 +62,10 @@ import {
   cacheSecretStorageKeyCallback, getSecretStorageKeyCallback, handleKeyUploadConflict, markDeviceBroken,
 } from './encryption';
 import { handleFoldersAccountData } from './folders';
+import {
+  FORUM_EVENT, GENERAL_TOPIC_KEY, getAllTopicRootIds, getRoomTopics, getThreadRootId, getTopicReadTimestamps,
+  isForumRoom, TOPIC_EVENT, TOPIC_READ_EVENT,
+} from './forum';
 import { handleGroupCallMemberEvent, handleGroupCallSignal, stopGroupCalls } from './groupCalls';
 import {
   findMessageId, getChatIdByRoomId, getEventId, getMessageId, getPeerIdByUserId, getRoomIdByGroupChatId, getUserIdByPeerId,
@@ -679,9 +685,100 @@ export function getDirectUserIds() {
   return [...dmRoomIdByUserId.keys()];
 }
 
+/* Topics */
+
+export function isRoomAdmin(room: Room) {
+  const levels = getRoomPowerLevels(room);
+  return (userId: string) => levels.getUserLevel(userId) >= POWER_LEVEL_ADMIN;
+}
+
+function getDeletedTopicRootIds(room: Room) {
+  const liveRootIds = new Set(getRoomTopics(room, isRoomAdmin(room)).map(({ rootId }) => rootId));
+  return new Set([...getAllTopicRootIds(room)].filter((rootId) => !liveRootIds.has(rootId)));
+}
+
+export type ForumThreadState = { unreadCount: number; readTs?: number; lastEvent?: MatrixEvent };
+
+// Each topic's unread count and latest message from what this device has loaded, keyed by the topic's first
+// event (or "main" for General). A topic counts as read up to where any of the person's devices read it
+export function getForumThreadStates(room: Room) {
+  const topics = getRoomTopics(room, isRoomAdmin(room));
+  const rootIds = new Set(topics.map(({ rootId }) => rootId));
+  const allRootIds = getAllTopicRootIds(room);
+  const reads = getTopicReadTimestamps(room);
+  // Someone who never read anything here has everything since they joined to read
+  const roomReadTs = getReadUpToMessageId(room, myUserId) ?? room.getMember(myUserId)?.events.member?.getTs();
+  const states = new Map<string, ForumThreadState>();
+  const getState = (key: string) => {
+    let state = states.get(key);
+    if (!state) {
+      state = { unreadCount: 0, readTs: reads[key] ?? roomReadTs };
+      states.set(key, state);
+    }
+    return state;
+  };
+  getState(GENERAL_TOPIC_KEY);
+  rootIds.forEach(getState);
+
+  const context = getChatContext(room);
+  room.getLiveTimeline().getEvents().forEach((event) => {
+    if (!isDisplayableEvent(event, context, room)) return;
+    const eventId = event.getId()!;
+    const rootId = getThreadRootId(event);
+    // What was said in a deleted topic is gone with it
+    if (!rootIds.has(rootId || eventId) && allRootIds.has(rootId || eventId)) return;
+    const key = rootId && rootIds.has(rootId) ? rootId : rootIds.has(eventId) ? eventId : GENERAL_TOPIC_KEY;
+    const state = getState(key);
+    state.lastEvent = event;
+    if (event.getSender() !== myUserId && state.readTs !== undefined && event.getTs() > state.readTs) {
+      state.unreadCount++;
+    }
+  });
+  return { topics, states };
+}
+
+export function buildTopicReadState(state: ForumThreadState) {
+  return { unreadCount: state.unreadCount, lastReadInboxMessageId: state.readTs };
+}
+
+// Sent after reading, a new message or a change on another device: every topic's count, and the group's total
+export function announceForumReadStates(room: Room) {
+  if (!isSyncPrepared || !isRoomVisible(room) || !isForumRoom(room)) return;
+  const chatId = getChatIdForRoom(room);
+  const { topics, states } = getForumThreadStates(room);
+  let total = 0;
+  states.forEach(({ unreadCount }) => {
+    total += unreadCount;
+  });
+  onUpdate({
+    '@type': 'updateThreadReadState',
+    chatId,
+    threadId: GENERAL_TOPIC_ID,
+    readState: buildTopicReadState(states.get(GENERAL_TOPIC_KEY)!),
+  });
+  topics.forEach((topic) => {
+    onUpdate({
+      '@type': 'updateThreadReadState',
+      chatId,
+      threadId: topic.id,
+      readState: buildTopicReadState(states.get(topic.rootId)!),
+    });
+  });
+  onUpdate({
+    '@type': 'updateChat', id: chatId, chat: {}, readState: { unreadCount: total },
+  });
+}
+
 // The server cannot see inside encrypted events, so it counts encrypted reactions, edits and other hidden
 // events as unread messages. For encrypted rooms the count is taken from the messages actually shown
 export function getUnreadCount(room: Room) {
+  if (isForumRoom(room) && !isRoomChannel(room)) {
+    let total = 0;
+    getForumThreadStates(room).states.forEach(({ unreadCount }) => {
+      total += unreadCount;
+    });
+    return total;
+  }
   const serverCount = room.getUnreadNotificationCount(NotificationCountType.Total) || 0;
   if (!serverCount || !room.hasEncryptionStateEvent()) return serverCount;
 
@@ -741,14 +838,24 @@ function getOthersReadUpToMessageId(room: Room, context: ChatContext) {
   return maxId;
 }
 
-export function getLastMessage(room: Room) {
+export function findLastMessage(room: Room) {
   const events = room.getLiveTimeline().getEvents();
   const context = getChatContext(room);
+  // What was said in a deleted topic is gone with it
+  const deletedTopicRootIds = isForumRoom(room) ? getDeletedTopicRootIds(room) : undefined;
   for (let i = events.length - 1; i >= 0; i--) {
-    const message = buildApiMessage(events[i], room, context);
-    if (message) return message;
+    const event = events[i];
+    if (deletedTopicRootIds?.has(getThreadRootId(event) || event.getId()!)) continue;
+    const message = buildApiMessage(event, room, context);
+    if (!message) continue;
+    markUndecryptable(event);
+    return { message, event };
   }
   return undefined;
+}
+
+export function getLastMessage(room: Room) {
+  return findLastMessage(room)?.message;
 }
 
 /* Comments under channel posts */
@@ -946,6 +1053,10 @@ function subscribeToClient(matrixClient: MatrixClient) {
   matrixClient.on(RoomEvent.MyMembership, handleMyMembership);
   matrixClient.on(RoomEvent.Name, sendUpdatedChat);
   matrixClient.on(RoomEvent.Tags, (event, room) => handleTags(room));
+  // Reading a topic on another device
+  matrixClient.on(RoomEvent.AccountData, (event, room) => {
+    if (event.getType() === TOPIC_READ_EVENT) announceForumReadStates(room);
+  });
   matrixClient.on(RoomMemberEvent.Typing, handleTyping);
   matrixClient.on(RoomMemberEvent.Name, handleMemberUpdate);
   matrixClient.on(UserEvent.DisplayName, handleUserProfile);
@@ -1119,6 +1230,19 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
 
   if (type === EventType.Direct) return;
 
+  if (type === FORUM_EVENT) {
+    sendUpdatedChat(room);
+    onUpdate({ '@type': 'updateTopics', chatId: getChatIdForRoom(room) });
+    return;
+  }
+
+  if (type === TOPIC_EVENT) {
+    // A new topic's first message arrives before its title; the list is read again once the title is there
+    onUpdate({ '@type': 'updateTopics', chatId: getChatIdForRoom(room) });
+    announceForumReadStates(room);
+    return;
+  }
+
   if (type === EventType.RoomMember || type === EventType.RoomPowerLevels || type === EventType.RoomAvatar
     || type === EventType.RoomName || type === EventType.RoomTopic || type === PERMISSIONS_EVENT) {
     if (type === EventType.RoomMember && computeDirectRooms()) {
@@ -1227,6 +1351,8 @@ async function handleLiveEvent(event: MatrixEvent, room: Room) {
   } else if (context.isChannel && areCommentsEnabled(room)) {
     announceCommentsInfo(room, event);
   }
+
+  if (isForumRoom(room) && sender !== myUserId) announceForumReadStates(room);
 }
 
 // Calls only happen in private chats; the main thread runs the call and answers through `sendMatrixCallEvent`
@@ -1338,6 +1464,7 @@ function handleReceipt(event: MatrixEvent, room: Room) {
 
   const chatId = getChatIdForRoom(room);
   if (isRoomChannel(room)) announcePostViews(room, chatId);
+  if (readers.has(myUserId) && isForumRoom(room)) announceForumReadStates(room);
   const readState: Record<string, number | undefined> = {};
   if (readers.has(myUserId)) {
     readState.lastReadInboxMessageId = getReadUpToMessageId(room, myUserId);
@@ -1478,8 +1605,12 @@ function handleDecrypted(event: MatrixEvent) {
   if (room) sendMessageUpdate(room, event);
 }
 
+// A message shown before it could be read is sent again once it is; at startup the newest ones may still be
+// decrypting
 export function markUndecryptable(event: MatrixEvent) {
-  if (event.isDecryptionFailure()) undecryptableEventIds.add(event.getId()!);
+  if (event.isDecryptionFailure() || event.getType() === EventType.RoomMessageEncrypted) {
+    undecryptableEventIds.add(event.getId()!);
+  }
 }
 
 function handleLoggedOut() {

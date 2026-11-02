@@ -9,14 +9,14 @@ import { LeftColumnContent } from '../../../types';
 
 import { DEBUG } from '../../../config';
 import { selectCommunityPanelId } from '../../../global/selectors';
+import { getAndroidBridge } from '../../../util/androidBridge';
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
-import { getAndroidBridge } from '../../../util/androidBridge';
 import buildClassName from '../../../util/buildClassName';
 
 import useSelector from '../../../hooks/data/useSelector';
-import useAndroidUpdate from '../../../hooks/useAndroidUpdate';
 import useInterval from '../../../hooks/schedulers/useInterval';
+import useAndroidUpdate from '../../../hooks/useAndroidUpdate';
 import useForumPanelRender from '../../../hooks/useForumPanelRender';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';

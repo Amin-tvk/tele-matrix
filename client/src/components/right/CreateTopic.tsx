@@ -36,6 +36,7 @@ type StateProps = {
   chat?: ApiChat;
   createTopicPanel?: TabState['createTopicPanel'];
   isCurrentUserPremium?: boolean;
+  hasTopicIcons?: boolean;
 };
 
 const CreateTopic = ({
@@ -43,6 +44,7 @@ const CreateTopic = ({
   chat,
   createTopicPanel,
   isCurrentUserPremium,
+  hasTopicIcons,
   onClose,
 }: OwnProps & StateProps) => {
   const { createTopic, openPremiumModal } = getActions();
@@ -138,17 +140,20 @@ const CreateTopic = ({
             teactExperimentControlled
           />
         </Island>
-        <Island className={styles.bottom}>
-          <CustomEmojiPicker
-            idPrefix="create-topic-icons-set-"
-            isHidden={!isActive}
-            loadAndPlay={isActive}
-            onCustomEmojiSelect={handleCustomEmojiSelect}
-            className={styles.iconPicker}
-            pickerListClassName="fab-padding-bottom"
-            withDefaultTopicIcons
-          />
-        </Island>
+        {/* Only Telegram's servers have the pack of topic icons; elsewhere tapping the icon changes its color */}
+        {hasTopicIcons && (
+          <Island className={styles.bottom}>
+            <CustomEmojiPicker
+              idPrefix="create-topic-icons-set-"
+              isHidden={!isActive}
+              loadAndPlay={isActive}
+              onCustomEmojiSelect={handleCustomEmojiSelect}
+              className={styles.iconPicker}
+              pickerListClassName="fab-padding-bottom"
+              withDefaultTopicIcons
+            />
+          </Island>
+        )}
       </div>
       <FloatingActionButton
         isShown={isTouched}
@@ -169,6 +174,7 @@ export default memo(withGlobal(
       chat: createTopicPanel?.chatId ? selectChat(global, createTopicPanel.chatId) : undefined,
       createTopicPanel,
       isCurrentUserPremium: selectIsCurrentUserPremium(global),
+      hasTopicIcons: Boolean(global.defaultTopicIconsId),
     };
   },
 )(CreateTopic));

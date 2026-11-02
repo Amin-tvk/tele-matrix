@@ -75,7 +75,7 @@ function toPlain(text: ApiRichText | undefined): string {
     case 'customEmoji':
       return text.alt;
     default:
-      return 'text' in text ? toPlain(text.text as ApiRichText) : '';
+      return 'text' in text ? toPlain(text.text) : '';
   }
 }
 
@@ -198,7 +198,7 @@ function renderBlock(block: ApiPageBlock, lines: string[], html: string[]) {
       html.push(`<p><code>${escapeHtml(block.source)}</code></p>`);
       return;
     default: {
-      const text = 'text' in block ? block.text as ApiRichText : undefined;
+      const text = 'text' in block ? block.text : undefined;
       if (!text) return;
       const tag = HEADING_TAGS[block.type] || 'p';
       lines.push(toPlain(text));

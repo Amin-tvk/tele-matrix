@@ -280,7 +280,8 @@ const CustomEmojiPicker = ({
       }
     } else if (withDefaultTopicIcons) {
       const defaultTopicIconsPack = stickerSetsById[defaultTopicIconsId!];
-      if (defaultTopicIconsPack.stickers?.length) {
+      // Servers without Telegram's topic icon pack (Peyvand's Matrix) have only the colored icons
+      if (defaultTopicIconsPack?.stickers?.length) {
         defaultSets.push({
           ...defaultTopicIconsPack,
           id: RECENT_SYMBOL_SET_ID,

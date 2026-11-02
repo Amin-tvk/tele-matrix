@@ -47,6 +47,9 @@ import {
 } from './ids';
 import { getEncryptedFileMediaId, markGifMedia } from './media';
 import { addMentionEntities } from './mentions';
+import {
+  getRoomTopic, getThreadRootId, isForumRoom, TOPIC_EVENT, TOPIC_KEY,
+} from './forum';
 import { getRoomTtlSeconds, isExpiredEvent, RETENTION_EVENT } from './retention';
 import { readRichMessage } from './richMessage';
 import { buildApiSticker, PACK_KEY, STICKER_MARKER } from './stickersState';
@@ -155,6 +158,7 @@ export function getRoomPowerLevels(room: Room) {
     nameLevel: events[EventType.RoomName] ?? stateDefault,
     pinLevel: events[EventType.RoomPinnedEvents] ?? stateDefault,
     tagLevel: events[MEMBER_TAG_EVENT] ?? stateDefault,
+    topicLevel: events[TOPIC_EVENT] ?? stateDefault,
     redactLevel: content.redact ?? 50,
     kickLevel: content.kick ?? 50,
     banLevel: content.ban ?? 50,
@@ -190,6 +194,7 @@ function buildAdminRights(level: number, room: Room): ApiChatAdminRights | undef
     pinMessages: level >= levels.pinLevel ? true : undefined,
     addAdmins: level >= POWER_LEVEL_OWNER ? true : undefined,
     manageRanks: level >= levels.tagLevel ? true : undefined,
+    manageTopics: isForumRoom(room) ? true : undefined,
   });
 }
 
@@ -221,6 +226,7 @@ function buildBannedRights(level: number, room: Room): ApiChatBannedRights | und
     inviteUsers: level < levels.inviteLevel ? true : undefined,
     pinMessages: level < levels.pinLevel ? true : undefined,
     editRank: level < levels.tagLevel ? true : undefined,
+    manageTopics: isForumRoom(room) && level < levels.topicLevel ? true : undefined,
   });
   if (rights.sendPhotos && rights.sendVideos && rights.sendRoundvideos && rights.sendAudios && rights.sendVoices
     && rights.sendDocs) {
@@ -284,6 +290,7 @@ export function buildApiChatFromRoom(
       : undefined,
     hasUsername: alias ? true : undefined,
     areSignaturesShown: isChannel ? true : undefined,
+    isForum: !isChannel && isForumRoom(room) ? true : undefined,
     folderId: isArchived ? 1 : undefined,
     ttlPeriod: getRoomTtlSeconds(room),
     isListed: true,
@@ -543,6 +550,18 @@ function buildMessageContent(
   switch (content.msgtype) {
     case MsgType.Text:
     case MsgType.Notice: {
+      const topic = content[TOPIC_KEY];
+      if (topic && typeof topic === 'object' && typeof topic.title === 'string') {
+        return {
+          action: omitUndefined({
+            mediaType: 'action',
+            type: 'topicCreate',
+            title: topic.title,
+            iconColor: typeof topic.icon_color === 'number' ? topic.icon_color : 0,
+            iconEmojiId: typeof topic.icon_emoji_id === 'string' ? topic.icon_emoji_id : undefined,
+          }) as ApiMessageAction,
+        };
+      }
       const richMessage = readRichMessage(content, (mediaContent) => {
         const built = buildStoryContent(mediaContent, event.getTs(), resolvePeerId);
         return (built?.photo || built?.video || built?.audio || built?.document)?.id;
@@ -893,7 +912,12 @@ export function buildApiMessage(
   // Comments belong to the channel's virtual discussion chat, in the thread of their post
   const commentRootId = isCommentEvent(event) ? getCommentRootEventId(event) : undefined;
   if (commentRootId) rememberCommentEvent(eventId, commentRootId);
-  const replyToTopId = commentRootId ? findMessageId(commentRootId) : undefined;
+  // A thread reply in a group with topics is a message in that topic
+  const threadRootId = !commentRootId && !isState ? getThreadRootId(event) : undefined;
+  const topic = threadRootId && isForumRoom(room)
+    ? getRoomTopic(room, threadRootId, (userId) => getRoomPowerLevels(room).getUserLevel(userId) >= POWER_LEVEL_ADMIN)
+    : undefined;
+  const replyToTopId = commentRootId ? findMessageId(commentRootId) : topic?.id;
   const isOutgoing = sender === context.myUserId && (!context.isChannel || Boolean(commentRootId));
   const forwardInfo = !isState ? buildForwardInfo(event.getContent(), context) : undefined;
 
@@ -904,7 +928,9 @@ export function buildApiMessage(
     date: Math.floor(event.getTs() / 1000),
     isOutgoing,
     senderId: context.resolvePeerId(sender),
-    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : buildStoryReplyInfo(event),
+    replyInfo: topic
+      ? { type: 'message', replyToMsgId: replyToMsgId || topic.id, replyToTopId: topic.id, isForumTopic: true }
+      : replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId } : buildStoryReplyInfo(event),
     forwardInfo,
     isEdited: replacingEvent ? true : undefined,
     editDate: replacingEvent ? Math.floor(replacingEvent.getTs() / 1000) : undefined,

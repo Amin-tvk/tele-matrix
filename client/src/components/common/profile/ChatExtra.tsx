@@ -470,7 +470,8 @@ const ChatExtra = ({
           </ListItem>
         )}
         {activeChatUsernames && !isTopicInfo && renderUsernames(activeChatUsernames, true)}
-        {((!activeChatUsernames && canInviteUsers) || isTopicInfo) && link && (
+        {/* Topic links are Telegram addresses (t.me/c/…), which lead nowhere for a Matrix group */}
+        {!activeChatUsernames && canInviteUsers && !isTopicInfo && link && (
           <ListItem
             icon="link"
             iconBg="orange"

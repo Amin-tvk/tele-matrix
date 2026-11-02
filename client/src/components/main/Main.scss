@@ -326,4 +326,8 @@ body.has-mobile-tab-bar #LeftColumn {
       transform: translateY(calc(10.5rem + env(safe-area-inset-bottom)));
     }
   }
+
+  .btn-update {
+    bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
 }

@@ -35,13 +35,19 @@ import type {
   ApiSticker,
   ApiThreadInfo,
   ApiTodoItem,
+  ApiTopic,
+  ApiTopicWithState,
   ApiUser,
   ApiUserStatus,
 } from '../types';
+import type { ForumThreadState } from './client';
+import type { RoomTopic, TopicContent } from './forum';
 import type { PackImage } from './stickersState';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../types';
 
-import { MUTE_INDEFINITE_TIMESTAMP, SCHEDULED_WHEN_ONLINE } from '../../config';
+import {
+  GENERAL_TOPIC_ID, MUTE_INDEFINITE_TIMESTAMP, SCHEDULED_WHEN_ONLINE, TOPICS_SLICE,
+} from '../../config';
 import { getEmojiOnlyCountForMessage } from '../../global/helpers/getEmojiOnlyCountForMessage';
 import buildUploadingMedia from '../../util/buildUploadingMedia';
 import { addTimestampEntities } from '../../util/dates/timestamp';
@@ -77,20 +83,24 @@ import {
   buildMessageForEvent,
   buildReadState,
   buildUser,
+  buildTopicReadState,
   buildUserStatus,
   computeDirectRooms,
   ensureReplyTargetsKnown,
   fetchCurrentApiUser,
+  findLastMessage,
   getChatContext,
   getChatIdForRoom,
   getClient,
   getDmUserId,
+  getForumThreadStates,
   getMyPeerId,
   getMyUserId,
   getPinnedChatIds,
   getRoomByChatId,
   getVisibleRooms,
   hasClient,
+  isRoomAdmin,
   markChatAnnounced,
   markUndecryptable,
   markUsersAnnounced,
@@ -108,6 +118,11 @@ import {
   THUMBNAIL_SEPARATOR,
 } from './constants';
 import { findRoomByAddress, searchPublicRooms, withTimeout } from './directory';
+import {
+  buildApiTopic, FORUM_EVENT, GENERAL_TOPIC_KEY, getAllTopicRootIds, getPinnedTopicRootIds, getRoomTopics,
+  getThreadRootId,
+  getTopicReadTimestamps, isForumRoom, TOPIC_EVENT, TOPIC_KEY, TOPIC_READ_EVENT,
+} from './forum';
 import { buildHtmlFromFormattedText } from './html';
 import {
   decodeMxc,
@@ -316,6 +331,11 @@ function buildTextContent(text: string, entities?: ApiMessageEntity[], room?: Ro
   });
 }
 
+function isForumChat(chat: ApiChat) {
+  const room = getRoomByChatId(chat.id);
+  return Boolean(room && isForumRoom(room));
+}
+
 function getEventIdForMessage(room: Room, messageId: number) {
   return getEventId(room.roomId, Math.floor(messageId));
 }
@@ -366,20 +386,12 @@ export async function fetchChats({
     const dmUserId = getDmUserId(room);
     if (dmUserId) userIds.add(dmUserId);
 
-    const events = room.getLiveTimeline().getEvents();
-    const context = getChatContext(room);
-    for (let i = events.length - 1; i >= 0; i--) {
-      const message = buildMessageForEvent(room, events[i]);
-      // A comment isn't its channel's last message
-      if (message && message.chatId === chat.id) {
-        markUndecryptable(events[i]);
-        messages.push(message);
-        lastMessageByChatId[chat.id] = message.id;
-        collectUserIds([events[i]]).forEach((userId) => userIds.add(userId));
-        break;
-      }
+    const last = findLastMessage(room);
+    if (last) {
+      messages.push(last.message);
+      lastMessageByChatId[chat.id] = last.message.id;
+      collectUserIds([last.event]).forEach((userId) => userIds.add(userId));
     }
-    void context;
 
     threadReadStatesById[chat.id] = buildReadState(room);
     threadInfos.push({
@@ -813,6 +825,7 @@ export async function updateChatDefaultBannedRights({
   setLevel([EventType.RoomName, EventType.RoomAvatar, EventType.RoomTopic], bannedRights.changeInfo,
     POWER_LEVEL_ADMIN);
   setLevel([MEMBER_TAG_EVENT], bannedRights.editRank, POWER_LEVEL_ADMIN);
+  if (isForumRoom(room)) setLevel([TOPIC_EVENT], bannedRights.manageTopics, POWER_LEVEL_ADMIN);
   const nextContent = {
     ...content,
     events,
@@ -975,8 +988,8 @@ export async function editChatParticipantRank({
 /* Messages */
 
 async function loadEventWindow(room: Room, anchorEventId: string | undefined, anchorTs: number | undefined, {
-  olderCount, newerCount,
-}: { olderCount: number; newerCount: number }) {
+  olderCount, newerCount, isIncluded,
+}: { olderCount: number; newerCount: number; isIncluded?: (event: MatrixEvent) => boolean }) {
   const client = getClient();
   const context = getChatContext(room);
   const timelineWindow = new TimelineWindow(client, room.getUnfilteredTimelineSet(), { windowLimit: Infinity });
@@ -988,7 +1001,9 @@ async function loadEventWindow(room: Room, anchorEventId: string | undefined, an
     anchorEventId = undefined;
   }
 
-  const countDisplayable = (events: MatrixEvent[]) => events.filter((event) => isDisplayableEvent(event, context, room)).length;
+  const countDisplayable = (events: MatrixEvent[]) => events.filter((event) => (
+    isDisplayableEvent(event, context, room) && (!isIncluded || isIncluded(event))
+  )).length;
   const getAnchorIndex = (events: MatrixEvent[]) => {
     if (anchorEventId) {
       const index = events.findIndex((event) => event.getId() === anchorEventId);
@@ -1060,15 +1075,30 @@ export async function fetchMessages({
     };
   }
 
+  const isTopicList = isForumRoom(room) && threadId !== undefined && threadId !== MAIN_THREAD_ID;
+  if (isTopicList && Number(threadId) !== GENERAL_TOPIC_ID) {
+    return fetchTopicMessages({
+      room, chat, topicId: Number(threadId), offsetId, addOffset, limit,
+    });
+  }
+  // General is everything said outside the topics
+  const topicRootIds = isTopicList ? getAllTopicRootIds(room) : undefined;
+  const isIncluded = topicRootIds && ((event: MatrixEvent) => {
+    const rootId = getThreadRootId(event);
+    return !topicRootIds.has(event.getId()!) && !(rootId && topicRootIds.has(rootId));
+  });
+
   const roundedOffsetId = offsetId ? Math.floor(offsetId) : undefined;
   const anchorEventId = roundedOffsetId ? getEventIdForMessage(room, roundedOffsetId) : undefined;
   const newerCount = addOffset < 0 ? -addOffset : 0;
   const olderCount = Math.max(limit - newerCount, 0) + Math.max(addOffset, 0);
 
-  const events = await loadEventWindow(room, anchorEventId, roundedOffsetId, {
+  const windowEvents = await loadEventWindow(room, anchorEventId, roundedOffsetId, {
     olderCount: olderCount + 1,
     newerCount: newerCount + 1,
+    isIncluded,
   });
+  const events = isIncluded ? windowEvents.filter(isIncluded) : windowEvents;
   const { messages, usedEvents } = await buildMessagesFromEvents(room, events);
   // Comments under channel posts belong to the channel's discussion chat
   const chatMessages = messages.filter(({ chatId }) => chatId === chat.id);
@@ -1099,6 +1129,306 @@ export async function fetchMessages({
     count: isStartReached ? slice.length : undefined,
     topics: [],
   };
+}
+
+/* Topics */
+
+const TOPIC_PAGE_SIZE = 100;
+const MAX_TOPIC_MESSAGES = 3000;
+
+async function loadTopicEvents(room: Room, rootId: string) {
+  const client = getClient();
+  const events: MatrixEvent[] = [];
+  let from: string | undefined;
+  do {
+    const result = await client.relations(room.roomId, rootId, RelationType.Thread, undefined, {
+      dir: Direction.Backward, limit: TOPIC_PAGE_SIZE, from,
+    });
+    events.push(...result.events);
+    from = result.nextBatch || undefined;
+  } while (from && events.length < MAX_TOPIC_MESSAGES);
+  // Thread replies are also in the room's timeline; those copies are the ones reactions and edits attach to
+  return events.map((event) => room.findEventById(event.getId()!) || event);
+}
+
+async function fetchTopicMessages({
+  room, chat, topicId, offsetId, addOffset = 0, limit,
+}: {
+  room: Room; chat: ApiChat; topicId: number; offsetId?: number; addOffset?: number; limit: number;
+}) {
+  const rootId = getEventIdForMessage(room, topicId);
+  if (!rootId) {
+    return {
+      messages: [], users: [], chats: [], count: 0, topics: [],
+    };
+  }
+  const [root] = await fetchEventsByIds(room, [rootId]);
+  const events = [...(root ? [root] : []), ...await loadTopicEvents(room, rootId)];
+  const { messages, usedEvents } = await buildMessagesFromEvents(room, events);
+  const sorted = messages.filter(({ chatId }) => chatId === chat.id).sort((a, b) => b.id - a.id);
+  let position = 0;
+  if (offsetId) {
+    position = sorted.findIndex(({ id }) => id < offsetId);
+    if (position === -1) position = sorted.length;
+  }
+  const start = Math.max(0, position + addOffset);
+  const slice = sorted.slice(start, start + limit);
+  const { users } = buildUsers(collectUserIds(usedEvents), room);
+  return {
+    messages: slice,
+    users,
+    chats: [],
+    count: sorted.length,
+    topics: [],
+  };
+}
+
+const GENERAL_TOPIC_COLOR = 0x6FB9F0;
+
+// A topic as Telegram's server describes it, with its unread count and latest message
+async function buildTopicWithState(
+  room: Room, topic: RoomTopic | undefined, state: ForumThreadState | undefined,
+) {
+  const myUserId = getMyUserId();
+  const isAdmin = isRoomAdmin(room)(myUserId);
+  let lastEvent = state?.lastEvent;
+  if (topic && !lastEvent) {
+    // Nothing of the topic in what this device has loaded: its latest message comes from the server
+    const result = await getClient().relations(room.roomId, topic.rootId, RelationType.Thread, undefined, {
+      dir: Direction.Backward, limit: 1,
+    }).catch(() => undefined);
+    [lastEvent] = result?.events || [];
+    if (!lastEvent) [lastEvent] = await fetchEventsByIds(room, [topic.rootId]);
+  }
+  const lastMessage = lastEvent ? (await buildMessagesFromEvents(room, [lastEvent])).messages[0] : undefined;
+  const createEvent = room.currentState.getStateEvents(EventType.RoomCreate, '');
+  const apiTopic: ApiTopic = topic ? buildApiTopic(topic, room, myUserId, isAdmin) : {
+    id: GENERAL_TOPIC_ID,
+    title: 'General',
+    iconColor: GENERAL_TOPIC_COLOR,
+    date: Math.floor((createEvent?.getTs() || 0) / 1000),
+    fromId: '',
+    notifySettings: {},
+  };
+  const topicWithState: ApiTopicWithState = {
+    topic: apiTopic,
+    readState: state ? buildTopicReadState(state) : undefined,
+    lastMessageId: lastMessage?.id,
+  };
+  return { topicWithState, lastMessage, lastEvent };
+}
+
+async function buildRoomTopicsWithState(room: Room) {
+  const { topics, states } = getForumThreadStates(room);
+  const general = await buildTopicWithState(room, undefined, states.get(GENERAL_TOPIC_KEY));
+  const others = await Promise.all(topics.map((topic) => buildTopicWithState(room, topic, states.get(topic.rootId))));
+  return [general, ...others];
+}
+
+export async function fetchTopics({
+  chat, query, offsetTopicId, limit = TOPICS_SLICE,
+}: {
+  chat: ApiChat;
+  query?: string;
+  offsetTopicId?: number;
+  offsetId?: number;
+  offsetDate?: number;
+  limit?: number;
+}) {
+  await waitForSync();
+  const room = requireRoom(chat);
+  if (!room || !isForumRoom(room)) return undefined;
+
+  const lowerQuery = query?.trim().toLowerCase();
+  const all = (await buildRoomTopicsWithState(room))
+    .filter(({ topicWithState }) => !lowerQuery || topicWithState.topic.title.toLowerCase().includes(lowerQuery))
+    // Latest activity first, like Telegram
+    .sort((a, b) => (b.lastMessage?.date || b.topicWithState.topic.date)
+      - (a.lastMessage?.date || a.topicWithState.topic.date));
+  const offsetIndex = offsetTopicId ? all.findIndex(({ topicWithState }) => (
+    topicWithState.topic.id === offsetTopicId
+  )) : -1;
+  const page = all.slice(offsetIndex + 1, offsetIndex + 1 + limit);
+  const messages = page.map(({ lastMessage }) => lastMessage).filter(Boolean);
+  const { users } = buildUsers(collectUserIds(page.map(({ lastEvent }) => lastEvent).filter(Boolean)), room);
+
+  return {
+    topics: page.map(({ topicWithState }) => topicWithState),
+    messages,
+    users,
+    count: all.length,
+    draftsById: {},
+  };
+}
+
+export async function fetchTopicById({ chat, topicId }: { chat: ApiChat; topicId: number }) {
+  await waitForSync();
+  const room = requireRoom(chat);
+  if (!room || !isForumRoom(room)) return undefined;
+  const { topics, states } = getForumThreadStates(room);
+  if (topicId === GENERAL_TOPIC_ID) {
+    const { topicWithState, lastMessage } = await buildTopicWithState(room, undefined, states.get(GENERAL_TOPIC_KEY));
+    return { topic: topicWithState, messages: lastMessage ? [lastMessage] : [] };
+  }
+  const topic = topics.find(({ id }) => id === topicId);
+  if (!topic) return undefined;
+  const { topicWithState, lastMessage } = await buildTopicWithState(room, topic, states.get(topic.rootId));
+  return { topic: topicWithState, messages: lastMessage ? [lastMessage] : [] };
+}
+
+// Turning topics on lets members start topics (the "create topics" permission), as Telegram does by default
+export async function toggleForum({ chat, isEnabled }: { chat: ApiChat; isEnabled: boolean }) {
+  const room = requireRoom(chat);
+  if (!room || isRoomChannel(room)) return undefined;
+  const client = getClient();
+  const current = room.currentState.getStateEvents(FORUM_EVENT, '')?.getContent() || {};
+  if (isEnabled) {
+    const content = { ...(room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent() || {}) };
+    const events: Record<string, number> = { ...(content.events || {}) };
+    if (events[TOPIC_EVENT] === undefined) {
+      events[TOPIC_EVENT] = getRoomPowerLevels(room).usersDefault;
+      await client.sendStateEvent(room.roomId, EventType.RoomPowerLevels, { ...content, events } as never, '');
+    }
+  }
+  await client.sendStateEvent(room.roomId, FORUM_EVENT as never, { ...current, enabled: isEnabled } as never, '');
+  return true as const;
+}
+
+export async function createTopic({
+  chat, title, iconColor, iconEmojiId,
+}: {
+  chat: ApiChat;
+  title: string;
+  iconColor?: number;
+  iconEmojiId?: string;
+  sendAs?: ApiPeer;
+  isTitleMissing?: true;
+}) {
+  const room = requireRoom(chat);
+  if (!room || !isForumRoom(room)) return undefined;
+  const client = getClient();
+  const topic = omitUndefined({ title, icon_color: iconColor, icon_emoji_id: iconEmojiId });
+  // Other Matrix apps show the topic's first message as the start of a thread
+  const { eventId } = await sendRoomEvent(room, EventType.RoomMessage, {
+    msgtype: MsgType.Text,
+    body: `Topic: ${title}`,
+    [TOPIC_KEY]: topic,
+  });
+  const rootTs = room.findEventById(eventId)?.getTs() || Date.now();
+  const topicId = getMessageId(room.roomId, eventId, rootTs);
+  try {
+    await client.sendStateEvent(room.roomId, TOPIC_EVENT as never, {
+      ...topic, creator: getMyUserId(), root_ts: rootTs,
+    } as never, eventId);
+  } catch (err) {
+    // Without its entry the topic would not be listed; its first message goes too
+    void client.redactEvent(room.roomId, eventId).catch(() => undefined);
+    throw err;
+  }
+  await markTopicRead(room, eventId, rootTs);
+  return topicId;
+}
+
+function getTopicStateContent(room: Room, rootId: string) {
+  return (room.currentState.getStateEvents(TOPIC_EVENT, rootId)?.getContent() || {}) as TopicContent;
+}
+
+export async function editTopic({
+  chat, topicId, title, iconEmojiId, isClosed, isHidden,
+}: {
+  chat: ApiChat;
+  topicId: number;
+  title?: string;
+  iconEmojiId?: string;
+  isClosed?: boolean;
+  isHidden?: boolean;
+}) {
+  const room = requireRoom(chat);
+  if (!room || topicId === GENERAL_TOPIC_ID) return undefined;
+  const rootId = getEventIdForMessage(room, topicId);
+  if (!rootId) return undefined;
+  const current = getTopicStateContent(room, rootId);
+  const next: TopicContent = omitUndefined({
+    ...current,
+    title: title ?? current.title,
+    // An empty ID takes the custom emoji away and brings back the colored icon
+    icon_emoji_id: iconEmojiId === undefined ? current.icon_emoji_id : (iconEmojiId && iconEmojiId !== '0')
+      ? iconEmojiId : undefined,
+    closed: isClosed ?? current.closed,
+    hidden: isHidden ?? current.hidden,
+  });
+  await getClient().sendStateEvent(room.roomId, TOPIC_EVENT as never, next as never, rootId);
+  return true as const;
+}
+
+// The topic's messages stay on the server as a thread, but the topic is gone from the list
+export async function deleteTopic({ chat, topicId }: { chat: ApiChat; topicId: number }) {
+  const room = requireRoom(chat);
+  if (!room || topicId === GENERAL_TOPIC_ID) return;
+  const rootId = getEventIdForMessage(room, topicId);
+  if (!rootId) return;
+  const client = getClient();
+  await client.sendStateEvent(room.roomId, TOPIC_EVENT as never, {
+    ...getTopicStateContent(room, rootId), deleted: true,
+  } as never, rootId);
+  await client.redactEvent(room.roomId, rootId).catch(() => undefined);
+}
+
+export async function togglePinnedTopic({
+  chat, topicId, isPinned,
+}: { chat: ApiChat; topicId: number; isPinned: boolean }) {
+  const room = requireRoom(chat);
+  const rootId = room ? getEventIdForMessage(room, topicId) : undefined;
+  if (!room || !rootId) return undefined;
+  const current = room.currentState.getStateEvents(FORUM_EVENT, '')?.getContent() || {};
+  const pinned = getPinnedTopicRootIds(room).filter((id) => id !== rootId);
+  if (isPinned) pinned.unshift(rootId);
+  await getClient().sendStateEvent(room.roomId, FORUM_EVENT as never, { ...current, pinned } as never, '');
+  onUpdate({
+    '@type': 'updatePinnedTopic', chatId: chat.id, topicId, isPinned,
+  });
+  return true as const;
+}
+
+// Where each topic was read up to is kept in the room's account data, so it is the same on every device.
+// Writes are put together, as scrolling through a topic reads many messages in a row
+const TOPIC_READ_DELAY_MS = 1000;
+const pendingTopicReads = new Map<string, Record<string, number>>();
+const topicReadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function markTopicRead(room: Room, key: string, ts: number) {
+  const pending = pendingTopicReads.get(room.roomId) || {};
+  pending[key] = Math.max(pending[key] || 0, ts);
+  pendingTopicReads.set(room.roomId, pending);
+  if (topicReadTimers.has(room.roomId)) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    topicReadTimers.set(room.roomId, setTimeout(async () => {
+      topicReadTimers.delete(room.roomId);
+      const changes = pendingTopicReads.get(room.roomId) || {};
+      pendingTopicReads.delete(room.roomId);
+      const topics = { ...getTopicReadTimestamps(room) };
+      Object.entries(changes).forEach(([changedKey, value]) => {
+        topics[changedKey] = Math.max(topics[changedKey] || 0, value);
+      });
+      try {
+        await getClient().setRoomAccountData(room.roomId, TOPIC_READ_EVENT as never, { topics } as never);
+      } catch {
+        // Read positions are best effort
+      }
+      resolve();
+    }, TOPIC_READ_DELAY_MS));
+  });
+}
+
+// A read receipt covers the whole room, so before it moves, topics without their own read position get the old
+// one; otherwise reading one topic would mark the others as read
+function keepTopicReadPositions(room: Room) {
+  const reads = getTopicReadTimestamps(room);
+  const roomReadTs = findMessageId(room.getEventReadUpTo(getMyUserId()) || '');
+  if (!roomReadTs) return;
+  [GENERAL_TOPIC_KEY, ...getRoomTopics(room, isRoomAdmin(room)).map(({ rootId }) => rootId)].forEach((key) => {
+    if (reads[key] === undefined) void markTopicRead(room, key, roomReadTs);
+  });
 }
 
 /* Comments under channel posts */
@@ -1467,7 +1797,13 @@ export function sendMessageLocal(params: SendMessageParams) {
     isScheduled: scheduledAt ? true : undefined,
     isOutgoing: chat.type !== 'chatTypeChannel',
     senderId: getMyPeerId(),
-    replyInfo: replyToMsgId ? { type: 'message', replyToMsgId, replyToTopId }
+    replyInfo: replyToMsgId ? omitUndefined({
+      type: 'message' as const,
+      replyToMsgId,
+      replyToTopId,
+      // Shown in its topic right away, like the message the server sends back
+      isForumTopic: replyToTopId && replyToTopId !== GENERAL_TOPIC_ID && isForumChat(chat) ? true as const : undefined,
+    })
       : replyInfo?.type === 'story' ? { type: 'story', peerId: replyInfo.peerId, storyId: replyInfo.storyId } : undefined,
     groupedId,
     isInAlbum: groupedId && media && (media.photo || media.video) ? true : undefined,
@@ -1786,6 +2122,10 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
     const replyToMsgId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
     const replyEventId = replyToMsgId ? getEventIdForMessage(room, replyToMsgId) : undefined;
     const isComment = isCommentsChatId(chat.id);
+    // A message in a topic is a thread reply to the topic's first message (see forum.ts)
+    const topicId = replyInfo?.type === 'message' ? replyInfo.replyToTopId : undefined;
+    const topicRootId = !isComment && topicId && topicId !== GENERAL_TOPIC_ID && isForumRoom(room)
+      ? getEventIdForMessage(room, topicId) : undefined;
     // Commenting on a post doesn't notify its author; replying to another comment does
     const isCommentOnPost = isComment && replyToMsgId === (
       (replyInfo?.type === 'message' && replyInfo.replyToTopId) || replyToMsgId
@@ -1794,7 +2134,7 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
       const ownerId = getUserIdByPeerId(replyInfo.peerId);
       if (ownerId) content[STORY_REPLY_KEY] = { user_id: ownerId, story_id: replyInfo.storyId };
     }
-    if (replyEventId && !isCommentOnPost) {
+    if (replyEventId && !isCommentOnPost && replyEventId !== topicRootId) {
       content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyEventId } };
       // Like in Telegram, the author of the replied message gets notified
       const replySender = room.findEventById(replyEventId)?.getSender();
@@ -1813,6 +2153,15 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
         event_id: postEventId,
         is_falling_back: !replyEventId || replyEventId === postEventId,
         'm.in_reply_to': { event_id: replyEventId || postEventId },
+      };
+    }
+    if (topicRootId) {
+      const isTopicReply = !replyEventId || replyEventId === topicRootId;
+      content['m.relates_to'] = {
+        rel_type: RelationType.Thread,
+        event_id: topicRootId,
+        is_falling_back: isTopicReply,
+        'm.in_reply_to': { event_id: isTopicReply ? topicRootId : replyEventId },
       };
     }
     // Comments are one event type, so a sticker there goes as an image marked as a sticker
@@ -2153,11 +2502,29 @@ export async function fetchPinnedMessages({ chat }: { chat: ApiChat; threadId: T
 }
 
 export async function markMessageListRead({
-  chat, maxId = 0,
+  chat, threadId, maxId = 0,
 }: { chat: ApiChat; threadId?: ThreadId; maxId?: number }) {
   const room = requireRoom(chat);
   if (!room) return;
   const client = getClient();
+
+  if (isForumRoom(room) && threadId !== undefined && threadId !== MAIN_THREAD_ID) {
+    const topicRootId = Number(threadId) === GENERAL_TOPIC_ID ? GENERAL_TOPIC_KEY
+      : getEventIdForMessage(room, Number(threadId));
+    if (!topicRootId) return;
+    keepTopicReadPositions(room);
+    const topicStates = getForumThreadStates(room).states.get(topicRootId);
+    const readTs = Math.floor(maxId) || topicStates?.lastEvent?.getTs() || Date.now();
+    await markTopicRead(room, topicRootId, readTs);
+    // The receipt still moves on, so people see their messages were read; it can't go back
+    const latestRead = getEventIdForMessage(room, Math.floor(maxId));
+    const latestEvent = latestRead ? room.findEventById(latestRead) : topicStates?.lastEvent;
+    const roomReadTs = findMessageId(room.getEventReadUpTo(getMyUserId()) || '') || 0;
+    if (latestEvent?.getId() && !latestEvent.status && latestEvent.getTs() > roomReadTs) {
+      await client.setRoomReadMarkers(room.roomId, latestEvent.getId()!, latestEvent).catch(() => undefined);
+    }
+    return;
+  }
 
   let eventId = maxId ? getEventIdForMessage(room, maxId) : undefined;
   let event = eventId ? room.findEventById(eventId) : undefined;

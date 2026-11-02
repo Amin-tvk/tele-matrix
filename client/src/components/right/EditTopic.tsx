@@ -39,6 +39,7 @@ type StateProps = {
   topic?: ApiTopic;
   editTopicPanel?: TabState['editTopicPanel'];
   isCurrentUserPremium?: boolean;
+  hasTopicIcons?: boolean;
 };
 
 const EditTopic = ({
@@ -47,6 +48,7 @@ const EditTopic = ({
   topic,
   editTopicPanel,
   isCurrentUserPremium,
+  hasTopicIcons,
   onClose,
 }: OwnProps & StateProps) => {
   const { editTopic, openPremiumModal } = getActions();
@@ -160,7 +162,7 @@ const EditTopic = ({
                 teactExperimentControlled
               />
             </Island>
-            {!isGeneral && (
+            {!isGeneral && hasTopicIcons && (
               <Island className={styles.bottom}>
                 <CustomEmojiPicker
                   idPrefix="edit-topic-icons-set-"
@@ -200,6 +202,7 @@ export default memo(withGlobal(
       topic,
       editTopicPanel,
       isCurrentUserPremium: selectIsCurrentUserPremium(global),
+      hasTopicIcons: Boolean(global.defaultTopicIconsId),
     };
   },
 )(EditTopic));
