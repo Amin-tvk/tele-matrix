@@ -2006,15 +2006,20 @@ addActionHandler('transcribeAudio', async (global, actions, payload): Promise<vo
 
   if (!chat) return;
 
-  global = updateChatMessage(global, chatId, messageId, {
-    transcriptionId: '',
-  });
-
-  setGlobal(global);
+  const previousId = selectChatMessage(global, chatId, messageId)?.transcriptionId;
+  const hasText = Boolean(previousId && global.transcriptions[previousId]?.text);
+  if (!hasText) {
+    global = updateChatMessage(global, chatId, messageId, {
+      transcriptionId: '',
+    });
+    setGlobal(global);
+  }
 
   const result = await callApi('transcribeAudio', { chat, messageId });
 
   global = getGlobal();
+  // A failed retry doesn't take away text that already arrived
+  if (!result && hasText) return;
   global = updateChatMessage(global, chatId, messageId, {
     transcriptionId: result,
     isTranscriptionError: !result,

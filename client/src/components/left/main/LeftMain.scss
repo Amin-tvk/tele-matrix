@@ -101,4 +101,14 @@
       transition: background-color 0.2s, color 0.2s, opacity 0.15s ease;
     }
   }
+
+  // The Android app's download fills the button from the start, like a progress bar
+  .btn-update-progress {
+    background-image: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.25) var(--update-progress, 0%),
+      transparent var(--update-progress, 0%)
+    );
+    font-variant-numeric: tabular-nums;
+  }
 }

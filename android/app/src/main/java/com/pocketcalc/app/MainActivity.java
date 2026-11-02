@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
     private static final int TELE_DARK = 0xFF212121;
     private static final int TELE_LIGHT = 0xFFFFFFFF;
     private static final long UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L;
+    private static final String LATEST_VERSION = "latestVersion";
     private static final String PREFS = "app";
 
     private FrameLayout root;
@@ -61,6 +62,8 @@ public class MainActivity extends Activity {
     private boolean isTeleDark = true;
     // Set while our own screens (file picker, lock setup) cover the app, so leaving for them doesn't lock
     private boolean isInOwnScreen;
+    // What the update button shows: nothing, available, downloading, installing or failed
+    private String updateState = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,7 +111,9 @@ public class MainActivity extends Activity {
         isInOwnScreen = false;
         if (webView.getVisibility() == View.VISIBLE) {
             onTeleShown();
-            Updater.resumePending(this);
+            // Back from Android's installer without updating (or from allowing installs): the button is ready again
+            if (Updater.STATE_INSTALLING.equals(updateState)) showUpdateState(Updater.STATE_AVAILABLE, 0);
+            Updater.resumePending(this, this::showUpdateState);
         }
     }
 
@@ -404,25 +409,47 @@ public class MainActivity extends Activity {
                 } finally {
                     connection.disconnect();
                 }
-                if (latest > BuildConfig.VERSION_CODE) runOnUiThread(() -> offerUpdate(latest));
+                prefs.edit().putInt(LATEST_VERSION, latest).apply();
+                if (latest > BuildConfig.VERSION_CODE) runOnUiThread(() -> showUpdateState(Updater.STATE_AVAILABLE, 0));
             } catch (Exception ignored) {
                 // Try again next time
             }
         }).start();
     }
 
-    private void offerUpdate(int version) {
-        if (isFinishing() || webView.getVisibility() != View.VISIBLE) return;
-        new AlertDialog.Builder(this)
-            .setTitle("Update available")
-            .setMessage("A new version of the app is ready. It downloads and installs here; you stay signed in.")
-            .setPositiveButton("Update", (dialog, which) -> Updater.start(this, version))
-            .setNegativeButton("Later", null)
-            .show();
+    private int getAvailableUpdate() {
+        int latest = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(LATEST_VERSION, 0);
+        return latest > BuildConfig.VERSION_CODE ? latest : 0;
+    }
+
+    // Tele shows an "Update" button at the bottom of the chat list, like Telegram, and its progress while the new
+    // version downloads
+    private void showUpdateState(String state, int percent) {
+        updateState = state;
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('peyvandupdate', { detail: { state: '"
+            + state + "', progress: " + percent + " } }))", null);
     }
 
     // What Tele's pages can call
     private class Bridge {
+        @JavascriptInterface
+        public int getAvailableUpdate() {
+            return MainActivity.this.getAvailableUpdate();
+        }
+
+        @JavascriptInterface
+        public String getUpdateState() {
+            return updateState;
+        }
+
+        @JavascriptInterface
+        public void startUpdate() {
+            runOnUiThread(() -> {
+                int version = MainActivity.this.getAvailableUpdate();
+                if (version > 0) Updater.start(MainActivity.this, version, MainActivity.this::showUpdateState);
+            });
+        }
+
         @JavascriptInterface
         public void panicDone() {
             runOnUiThread(MainActivity.this::wipeTele);

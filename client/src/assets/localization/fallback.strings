@@ -4471,6 +4471,7 @@
 "MatrixRecoveryErrorWrongKey" = "That doesn't open your message backup. Check for typos, or try your account password or another recovery key you saved.";
 "MatrixRecoveryErrorNoBackup" = "There is no key backup on this account";
 "MatrixRecoveryErrorUnknown" = "Couldn't open the backup right now because of a connection or server problem. What you entered may well be right: try again in a moment.";
+"MatrixRecoveryAlreadySet" = "Encryption is already set up on this device. Nothing to enter.";
 "MatrixRecoveryPrompt" = "Enter your recovery key to read your encrypted messages on this device.";
 "MatrixDeviceBrokenAction" = "Sign Out";
 "MatrixDeviceBrokenTitle" = "Fix Encryption";

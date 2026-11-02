@@ -20,6 +20,7 @@ import type {
   ApiChatMember,
   ApiDraft,
   ApiGlobalMessageSearchType,
+  ApiInputRichMessage,
   ApiMessage,
   ApiMessageEntity,
   ApiMessageSearchType,
@@ -46,11 +47,13 @@ import buildUploadingMedia from '../../util/buildUploadingMedia';
 import { addTimestampEntities } from '../../util/dates/timestamp';
 import { omitUndefined, unique } from '../../util/iteratees';
 import { getMessageKey } from '../../util/keys/messageKey';
+import { pause } from '../../util/schedulers';
 import { getServerTime } from '../../util/serverTime';
 import {
   buildApiChatMember,
   buildApiUser,
   buildApiUserStatus,
+  buildStoryContent,
   countPostViews,
   getLocalpart,
   getMemberTag,
@@ -121,6 +124,7 @@ import { fetchMessageAttachment, uploadContent, uploadFile } from './media';
 import { getAuthHeaders } from './session';
 import { recordReactionUsage } from './reactionUsage';
 import { RETENTION_EVENT } from './retention';
+import { buildRichMessageContent, getRichMediaAlias, rememberRichMedia } from './richMessage';
 import { retryOnNetworkError } from './retry';
 import { scheduleRoomEvent } from './scheduled';
 import { addRecentSticker } from './stickers';
@@ -1438,7 +1442,7 @@ export async function searchMessagesGlobal({
 export function sendMessageLocal(params: SendMessageParams) {
   if (params.scheduledAt === SCHEDULED_WHEN_ONLINE) params = { ...params, scheduledAt: undefined };
   const {
-    chat, lastMessageId, text, entities, replyInfo, attachment, sticker, gif, groupedId, wasDrafted, todo,
+    chat, lastMessageId, text, entities, replyInfo, attachment, sticker, gif, groupedId, wasDrafted, todo, richMessage,
   } = params;
   if (!chat) return undefined;
 
@@ -1457,6 +1461,7 @@ export function sendMessageLocal(params: SendMessageParams) {
       sticker,
       video: gif || media?.video,
       todo: todo ? { mediaType: 'todo' as const, todo: todo.todo } : undefined,
+      richMessage,
     }),
     date: scheduledAt || getServerTime(),
     isScheduled: scheduledAt ? true : undefined,
@@ -1519,15 +1524,15 @@ async function uploadStillThumbnail(blob: Blob) {
 }
 
 async function buildAttachmentContent(
-  room: Room, attachment: ApiAttachment, localMessage: ApiMessage, onProgress?: ApiOnProgress,
+  room: Room, attachment: ApiAttachment, localMessage: ApiMessage | undefined, onProgress?: ApiOnProgress,
 ) {
   const isEncrypted = await isRoomEncrypted(room);
   const blob: Blob = attachment.blob
     || await fetch(attachment.compressedBlobUrl || attachment.blobUrl).then((response) => response.blob());
-  const messageKey = getMessageKey(localMessage);
-  const progress: ApiOnProgress | undefined = onProgress ? Object.assign((value: number) => {
+  const messageKey = localMessage && getMessageKey(localMessage);
+  const progress: ApiOnProgress | undefined = onProgress && messageKey ? Object.assign((value: number) => {
     onProgress(value, messageKey);
-  }, { get isCanceled() { return onProgress.isCanceled; } }) : undefined;
+  }, { get isCanceled() { return onProgress.isCanceled; } }) : onProgress;
 
   const { mimeType, filename } = attachment;
   const isGifPhoto = !attachment.shouldSendAsFile && mimeType === 'image/gif';
@@ -1617,6 +1622,24 @@ async function buildAttachmentContent(
     ...source,
     info: baseInfo,
   };
+}
+
+// A picture, video or file put into an article is uploaded as soon as it is added, like Telegram does; the
+// article then carries its Matrix content (see richMessage.ts)
+export async function uploadRichMedia(
+  { chat, attachment }: { chat: ApiChat; attachment: ApiAttachment }, onProgress?: ApiOnProgress,
+) {
+  const room = await ensureRoomForChat(chat);
+  if (!room) return undefined;
+  const content = await buildAttachmentContent(room, attachment, undefined, onProgress);
+  if (onProgress?.isCanceled) return undefined;
+  const built = buildStoryContent(content, Date.now(), getPeerIdByUserId);
+  const media = attachment.shouldSendAsFile ? built?.document : built?.photo || built?.video || built?.audio
+    || built?.document;
+  if (!media?.id) return undefined;
+  const alias = getRichMediaAlias(media.id);
+  rememberRichMedia(alias, content);
+  return { ...media, id: alias };
 }
 
 async function sendRoomEvent(room: Room, type: string, content: Record<string, unknown>) {
@@ -1754,6 +1777,8 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
       return undefined;
     } else if (params.todo) {
       content = buildTodoContent(params.todo);
+    } else if (params.richMessage) {
+      content = buildRichMessageContent(params.richMessage);
     } else {
       content = buildTextContent(text || '', entities, room);
     }
@@ -1835,17 +1860,39 @@ export async function sendMessage(params: SendMessageParams, onProgress?: ApiOnP
 }
 
 export async function editMessage({
-  chat, message, text, entities,
+  chat, message, text, entities, richMessage,
 }: {
   chat: ApiChat;
   message: ApiMessage;
   text: string;
   entities?: ApiMessageEntity[];
+  richMessage?: ApiInputRichMessage;
   noWebPage?: boolean;
 }) {
   const room = requireRoom(chat);
   const eventId = room ? getEventIdForMessage(room, message.id) : undefined;
   if (!room || !eventId) return undefined;
+
+  if (richMessage) {
+    const newContent = buildRichMessageContent(richMessage);
+    onUpdate({
+      '@type': 'updateMessage',
+      chatId: chat.id,
+      id: message.id,
+      message: {
+        content: { ...message.content, richMessage },
+        isEdited: true,
+        editDate: getServerTime(),
+      },
+    });
+    await sendRoomEvent(room, isCommentsChatId(chat.id) ? COMMENT_EVENT : EventType.RoomMessage, {
+      ...newContent,
+      body: `* ${newContent.body as string}`,
+      'm.new_content': newContent,
+      'm.relates_to': { rel_type: RelationType.Replace, event_id: eventId },
+    });
+    return true;
+  }
 
   const original = room.findEventById(eventId);
   const originalContent = original?.getContent() || {};
@@ -1917,9 +1964,33 @@ async function sendTodoUpdate(chat: ApiChat, messageId: number, update: Paramete
 }
 
 // Voice messages become text on this server's own speech recognition (see server/transcriber): the audio is
-// decrypted here and sent only when the person asks, and the server keeps nothing
+// decrypted here and sent only when the person asks, and the server keeps nothing. The server answers with a
+// job at once and the text is fetched when ready, so a queue never runs into a proxy's timeout
 const TRANSCRIBE_TIMEOUT_MS = 5 * 60 * 1000;
+const TRANSCRIBE_POLL_MS = 1500;
 const transcriptions = new Map<string, string>();
+// Tapping again while a message is being recognized waits for the same answer instead of starting over
+const pendingTranscriptions = new Map<string, Promise<string | undefined>>();
+
+async function requestTranscription(content: Parameters<typeof fetchMessageAttachment>[0]) {
+  const audio = await fetchMessageAttachment(content);
+  if (!audio) return undefined;
+  const url = `${self.location.origin}/transcribe`;
+  const deadline = Date.now() + TRANSCRIBE_TIMEOUT_MS;
+  let response = await fetch(url, {
+    method: 'POST',
+    headers: { ...getAuthHeaders(), 'Content-Type': audio.mimeType || 'application/octet-stream' },
+    body: audio.data,
+  });
+  while (response.status === 202 && Date.now() < deadline) {
+    const { job } = await response.json() as { job: string };
+    await pause(TRANSCRIBE_POLL_MS);
+    response = await fetch(`${url}?job=${encodeURIComponent(job)}`, { headers: getAuthHeaders(), cache: 'no-store' });
+  }
+  if (!response.ok) return undefined;
+  const { text } = await response.json() as { text?: string };
+  return text?.trim() || '…';
+}
 
 export async function transcribeAudio({ chat, messageId }: { chat: ApiChat; messageId: number }) {
   const room = requireRoom(chat);
@@ -1932,25 +2003,20 @@ export async function transcribeAudio({ chat, messageId }: { chat: ApiChat; mess
     onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: known });
     return eventId;
   }
-  onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: '', isPending: true });
 
-  try {
-    const audio = await fetchMessageAttachment(event.getContent());
-    if (!audio) return undefined;
-    const response = await withTimeout(fetch(`${self.location.origin}/transcribe`, {
-      method: 'POST',
-      headers: { ...getAuthHeaders(), 'Content-Type': audio.mimeType || 'application/octet-stream' },
-      body: audio.data,
-    }), TRANSCRIBE_TIMEOUT_MS);
-    if (!response?.ok) return undefined;
-    const { text } = await response.json() as { text?: string };
-    const result = text?.trim() || '…';
-    transcriptions.set(eventId, result);
-    onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: result });
-    return eventId;
-  } catch {
-    return undefined;
+  let pending = pendingTranscriptions.get(eventId);
+  if (!pending) {
+    onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: '', isPending: true });
+    pending = requestTranscription(event.getContent()).catch(() => undefined);
+    pendingTranscriptions.set(eventId, pending);
+    void pending.then((result) => {
+      pendingTranscriptions.delete(eventId);
+      if (result === undefined) return;
+      transcriptions.set(eventId, result);
+      onUpdate({ '@type': 'updateTranscribedAudio', transcriptionId: eventId, text: result });
+    });
   }
+  return (await pending) === undefined ? undefined : eventId;
 }
 
 export function toggleTodoCompleted({

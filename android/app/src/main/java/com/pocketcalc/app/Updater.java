@@ -9,9 +9,6 @@ import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -20,14 +17,27 @@ import java.net.URL;
 
 // Downloads a new version inside the app and hands it to Android's installer, so updating is one tap instead of
 // a trip through the browser and the Downloads folder. The new APK is signed with the same key, so Android
-// installs it over this one and everything stays as it was
+// installs it over this one and everything stays as it was. Like Telegram, the progress shows on Tele's own
+// "Update" button at the bottom of the chat list, which the listener passes on to
 final class Updater {
     private static final String PREFS = "app";
     private static final String PENDING_VERSION = "pendingInstallVersion";
 
+    static final String STATE_DOWNLOADING = "downloading";
+    static final String STATE_INSTALLING = "installing";
+    static final String STATE_FAILED = "failed";
+    static final String STATE_AVAILABLE = "available";
+
+    interface Listener {
+        void onState(String state, int percent);
+    }
+
+    private static boolean isRunning;
+
     private Updater() {}
 
-    static void start(Activity activity, int version) {
+    static void start(Activity activity, int version, Listener listener) {
+        if (isRunning) return;
         // Android 8+ asks once whether this app may install updates
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.getPackageManager().canRequestPackageInstalls()) {
             activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(PENDING_VERSION, version).apply();
@@ -46,58 +56,36 @@ final class Updater {
                 .show();
             return;
         }
-        download(activity, version);
+        download(activity, version, listener);
     }
 
     // Called when the app comes back from the "install unknown apps" screen
-    static void resumePending(Activity activity) {
+    static void resumePending(Activity activity, Listener listener) {
         int version = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(PENDING_VERSION, 0);
         if (version == 0) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.getPackageManager().canRequestPackageInstalls()) {
             return;
         }
         activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(PENDING_VERSION).apply();
-        download(activity, version);
+        download(activity, version, listener);
     }
 
-    private static void download(Activity activity, int version) {
-        ProgressBar bar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
-        bar.setMax(100);
-        TextView label = new TextView(activity);
-        label.setText("Downloading…");
-        LinearLayout layout = new LinearLayout(activity);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        int padding = (int) (24 * activity.getResources().getDisplayMetrics().density);
-        layout.setPadding(padding, padding / 2, padding, 0);
-        layout.addView(label);
-        layout.addView(bar);
-        AlertDialog dialog = new AlertDialog.Builder(activity)
-            .setTitle("Updating")
-            .setView(layout)
-            .setCancelable(false)
-            .show();
-
+    private static void download(Activity activity, int version, Listener listener) {
+        isRunning = true;
+        listener.onState(STATE_DOWNLOADING, 0);
         new Thread(() -> {
-            String error = null;
+            boolean isDone = false;
             try {
-                install(activity, version, (percent) -> activity.runOnUiThread(() -> {
-                    bar.setProgress(percent);
-                    label.setText("Downloading… " + percent + "%");
-                }));
-            } catch (Exception e) {
-                error = "The update could not be downloaded. Check your connection and try again.";
+                install(activity, version, (percent) -> activity.runOnUiThread(
+                    () -> listener.onState(STATE_DOWNLOADING, percent)));
+                isDone = true;
+            } catch (Exception ignored) {
+                // Shown on the button, which then tries again
             }
-            String message = error;
+            boolean isInstalling = isDone;
             activity.runOnUiThread(() -> {
-                if (!activity.isFinishing()) dialog.dismiss();
-                if (message != null && !activity.isFinishing()) {
-                    new AlertDialog.Builder(activity)
-                        .setTitle("Update failed")
-                        .setMessage(message)
-                        .setPositiveButton("Try again", (d, w) -> download(activity, version))
-                        .setNegativeButton("Later", null)
-                        .show();
-                }
+                isRunning = false;
+                listener.onState(isInstalling ? STATE_INSTALLING : STATE_FAILED, 100);
             });
         }).start();
     }

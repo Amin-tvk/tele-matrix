@@ -1,6 +1,7 @@
 import type { ActionReturnType } from '../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { pause } from '../../../util/schedulers';
 import { callApi } from '../../../api/gramjs';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import { updateTabState } from '../../reducers/tabs';
@@ -9,6 +10,7 @@ import { selectTabState } from '../../selectors';
 const RECOVERY_PROMPT_DURATION = 15000;
 
 let lastPromptAt = 0;
+let isChecking = false;
 
 const SETUP_PROMPT_INTERVAL = 3 * 24 * 60 * 60 * 1000;
 const SETUP_PROMPT_STORAGE_KEY = 'peyvand-recovery-setup-prompt';
@@ -46,10 +48,27 @@ function getRecoveryMode(status: {
   return 'restore';
 }
 
+// Right after start or a reconnect the backup may still be switching on, and a dropped request reads as missing.
+// The prompt waits and asks again, and appears only if the device still isn't set up
+const RECHECK_DELAY = 20000;
+
+async function fetchSettledStatus() {
+  const first = await callApi('fetchEncryptionStatus');
+  if (!first?.isAvailable || first.isUncertain || first.isDeviceBroken || getRecoveryMode(first) === 'ready') {
+    return first;
+  }
+  await pause(RECHECK_DELAY);
+  const second = await callApi('fetchEncryptionStatus');
+  return second && !second.isUncertain ? second : undefined;
+}
+
 addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<void> => {
-  if (Date.now() - lastPromptAt < RECOVERY_PROMPT_DURATION) return;
-  const status = await callApi('fetchEncryptionStatus');
-  if (!status?.isAvailable) return;
+  if (Date.now() - lastPromptAt < RECOVERY_PROMPT_DURATION || isChecking) return;
+  isChecking = true;
+  const status = await fetchSettledStatus().finally(() => {
+    isChecking = false;
+  });
+  if (!status?.isAvailable || status.isUncertain) return;
   // A recovery key can't help a device whose keys were lost; it needs a new sign-in instead
   // Opened right away: until the next sign-in, new messages can't be read on this device
   if (status.isDeviceBroken) {
@@ -72,7 +91,7 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
   if (mode === 'restore' && status.hasKeyBackup && shouldOpenRestoreModal()) {
     global = getGlobal();
     if (!selectTabState(global, getCurrentTabId()).encryptionRecoveryModal) {
-      actions.openEncryptionRecoveryModal({ tabId: getCurrentTabId() });
+      actions.openEncryptionRecoveryModal({ isFromPrompt: true, tabId: getCurrentTabId() });
     }
     return;
   }
@@ -81,7 +100,7 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
   actions.showNotification({
     message: { key: isSetup ? 'MatrixSetupPrompt' : 'MatrixRecoveryPrompt' },
     actionText: { key: isSetup ? 'MatrixSetupAction' : 'MatrixRecoveryEnter' },
-    action: { action: 'openEncryptionRecoveryModal', payload: { tabId: getCurrentTabId() } },
+    action: { action: 'openEncryptionRecoveryModal', payload: { isFromPrompt: true, tabId: getCurrentTabId() } },
     duration: RECOVERY_PROMPT_DURATION,
     icon: 'lock',
     tabId: getCurrentTabId(),
@@ -89,7 +108,7 @@ addActionHandler('checkEncryptionRecovery', async (global, actions): Promise<voi
 });
 
 addActionHandler('openEncryptionRecoveryModal', async (global, actions, payload): Promise<void> => {
-  const { tabId = getCurrentTabId() } = payload || {};
+  const { isFromPrompt, tabId = getCurrentTabId() } = payload || {};
   global = updateTabState(global, { encryptionRecoveryModal: { isLoading: true } }, tabId);
   setGlobal(global);
 
@@ -97,6 +116,13 @@ addActionHandler('openEncryptionRecoveryModal', async (global, actions, payload)
 
   global = getGlobal();
   if (!selectTabState(global, tabId).encryptionRecoveryModal) return;
+  // The reminder was out of date by the time it was tapped: nothing to enter, so no window either
+  if (isFromPrompt && status?.isAvailable && !status.isDeviceBroken && getRecoveryMode(status) === 'ready') {
+    global = updateTabState(global, { encryptionRecoveryModal: undefined }, tabId);
+    setGlobal(global);
+    actions.showNotification({ message: { key: 'MatrixRecoveryAlreadySet' }, icon: 'check', tabId });
+    return;
+  }
   // Accounts with an old key backup but no secret storage restore with the backup key
   const mode = !status?.isAvailable ? 'restore'
     : status.isDeviceBroken ? 'broken'

@@ -11,9 +11,11 @@ import { DEBUG } from '../../../config';
 import { selectCommunityPanelId } from '../../../global/selectors';
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
+import { getAndroidBridge } from '../../../util/androidBridge';
 import buildClassName from '../../../util/buildClassName';
 
 import useSelector from '../../../hooks/data/useSelector';
+import useAndroidUpdate from '../../../hooks/useAndroidUpdate';
 import useInterval from '../../../hooks/schedulers/useInterval';
 import useForumPanelRender from '../../../hooks/useForumPanelRender';
 import useLang from '../../../hooks/useLang';
@@ -75,6 +77,7 @@ const LeftMain = ({
   const [isNewChatButtonShown, setIsNewChatButtonShown] = useState(IS_TOUCH_ENV);
   const [tauriUpdate, setTauriUpdate] = useState<Update>();
   const [isTauriUpdateDownloading, setIsTauriUpdateDownloading] = useState(false);
+  const androidUpdate = useAndroidUpdate();
 
   const {
     shouldRenderForumPanel, handleForumPanelAnimationEnd,
@@ -95,7 +98,7 @@ const LeftMain = ({
   const {
     shouldRender: shouldRenderUpdateButton,
     transitionClassNames: updateButtonClassNames,
-  } = useShowTransitionDeprecated(isAppUpdateAvailable || Boolean(tauriUpdate));
+  } = useShowTransitionDeprecated(isAppUpdateAvailable || Boolean(tauriUpdate) || Boolean(androidUpdate.state));
 
   const isMouseInsideRef = useRef(false);
 
@@ -127,6 +130,10 @@ const LeftMain = ({
   });
 
   const handleUpdateClick = useLastCallback(async () => {
+    if (androidUpdate.state) {
+      if (androidUpdate.state === 'available' || androidUpdate.state === 'failed') getAndroidBridge()?.startUpdate?.();
+      return;
+    }
     if (tauriUpdate) {
       try {
         setIsTauriUpdateDownloading(true);
@@ -246,11 +253,16 @@ const LeftMain = ({
         <Button
           fluid
           badge
-          className={buildClassName('btn-update', updateButtonClassNames)}
+          className={buildClassName(
+            'btn-update', updateButtonClassNames, androidUpdate.state === 'downloading' && 'btn-update-progress',
+          )}
+          style={androidUpdate.state === 'downloading' ? `--update-progress: ${androidUpdate.progress}%` : undefined}
           onClick={handleUpdateClick}
-          isLoading={isTauriUpdateDownloading}
+          isLoading={isTauriUpdateDownloading || androidUpdate.state === 'installing'}
         >
-          {lang('UpdateTelegram')}
+          {androidUpdate.state === 'downloading' ? `Downloading… ${androidUpdate.progress}%`
+            : androidUpdate.state === 'failed' ? 'Update failed: tap to try again'
+              : lang('UpdateTelegram')}
         </Button>
       )}
       {shouldRenderCommunityPanel && (

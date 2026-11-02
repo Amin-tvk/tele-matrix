@@ -26,6 +26,8 @@ export type EncryptionStatus = {
   isDeviceBroken: boolean;
   // The backup opens with the account password; after an admin reset it's the previous password
   isPasswordBased: boolean;
+  // Some of it couldn't be read (a dropped connection), so the rest says nothing about what is missing
+  isUncertain?: boolean;
 };
 
 export type RecoverySetupResult = {
@@ -178,14 +180,19 @@ export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefi
     };
   }
 
+  let isUncertain = false;
+  const orUncertain = <T>(fallback: T) => () => {
+    isUncertain = true;
+    return fallback;
+  };
   const [
     defaultKeyId, backupInfo, verification, activeBackup, isCrossSigningReady, isDeviceBroken,
   ] = await Promise.all([
-    client.secretStorage.getDefaultKeyId().catch(() => null),
-    crypto.getKeyBackupInfo().catch(() => null),
-    crypto.getDeviceVerificationStatus(getMyUserId(), client.getDeviceId()!).catch(() => null),
-    crypto.getActiveSessionBackupVersion().catch(() => null),
-    crypto.isCrossSigningReady().catch(() => false),
+    client.secretStorage.getDefaultKeyId().catch(orUncertain(null)),
+    crypto.getKeyBackupInfo().catch(orUncertain(null)),
+    crypto.getDeviceVerificationStatus(getMyUserId(), client.getDeviceId()!).catch(orUncertain(null)),
+    crypto.getActiveSessionBackupVersion().catch(orUncertain(null)),
+    crypto.isCrossSigningReady().catch(orUncertain(false)),
     checkIsDeviceBroken(),
   ]);
 
@@ -198,6 +205,7 @@ export async function fetchEncryptionStatus(): Promise<EncryptionStatus | undefi
     isCrossSigningReady,
     isDeviceBroken,
     isPasswordBased: isPasswordBackup(),
+    isUncertain: isUncertain || undefined,
   };
 }
 

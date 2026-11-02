@@ -48,6 +48,7 @@ import {
 import { getEncryptedFileMediaId, markGifMedia } from './media';
 import { addMentionEntities } from './mentions';
 import { getRoomTtlSeconds, isExpiredEvent, RETENTION_EVENT } from './retention';
+import { readRichMessage } from './richMessage';
 import { buildApiSticker, PACK_KEY, STICKER_MARKER } from './stickersState';
 import { FORWARDED_STORY_KEY, getStoriesSummary, STORY_REPLY_KEY } from './storiesState';
 import { buildTodoMedia } from './todo';
@@ -541,8 +542,14 @@ function buildMessageContent(
 
   switch (content.msgtype) {
     case MsgType.Text:
-    case MsgType.Notice:
+    case MsgType.Notice: {
+      const richMessage = readRichMessage(content, (mediaContent) => {
+        const built = buildStoryContent(mediaContent, event.getTs(), resolvePeerId);
+        return (built?.photo || built?.video || built?.audio || built?.document)?.id;
+      });
+      if (richMessage) return { richMessage };
       return { text: buildText(content, resolvePeerId) };
+    }
     case MsgType.Emote: {
       const text = buildText(content, resolvePeerId);
       const italic = { type: ApiMessageEntityTypes.Italic, offset: 0, length: text.text.length } as const;

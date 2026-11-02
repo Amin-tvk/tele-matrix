@@ -162,7 +162,7 @@ export interface ActionPayloads {
   closeEmergencyAlertModal: WithTabId | undefined;
   openStoryComposerModal: WithTabId | undefined;
   closeStoryComposerModal: WithTabId | undefined;
-  openEncryptionRecoveryModal: WithTabId | undefined;
+  openEncryptionRecoveryModal: ({ isFromPrompt?: boolean } & WithTabId) | undefined;
   requestDeviceVerification: WithTabId | undefined;
   acceptDeviceVerification: WithTabId | undefined;
   confirmDeviceVerification: { isMatch: boolean } & WithTabId;

@@ -97,7 +97,8 @@ function parseMediaHash(rawUrl: string): ParsedMediaHash | undefined {
     return query ? { kind, mediaId: query } : undefined;
   }
 
-  const [mediaId, thumbnailId] = match[2].split(THUMBNAIL_SEPARATOR);
+  // Media in articles is known by a number standing for its Matrix ID (see richMessage.ts)
+  const [mediaId, thumbnailId] = (getValue(`a:${match[2]}`) || match[2]).split(THUMBNAIL_SEPARATOR);
   const params = new URLSearchParams(query);
   return {
     kind,
